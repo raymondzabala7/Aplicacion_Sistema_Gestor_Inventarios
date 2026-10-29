@@ -1,0 +1,33 @@
+rules_version = '2';
+// Reglas de FrescoStock (responsable: Julián).
+// El perfil del empleado vive en usuarios/{correo} y su campo "rol" decide qué puede hacer.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function perfil() { return get(/databases/$(database)/documents/usuarios/$(request.auth.token.email.lower())).data; }
+    function activo() { return request.auth != null && perfil().activo == true; }
+    function rol(r) { return activo() && perfil().rol in r; }
+
+    match /categorias/{id}  { allow read: if activo(); allow write: if rol(['admin']); }
+    match /proveedores/{id} { allow read: if activo(); allow write: if rol(['admin']); }
+    match /usuarios/{email} { allow read: if activo(); allow write: if rol(['admin']); }
+
+    // El stock cambia con ventas (cajero), entregas y ajustes (bodega) y ediciones (admin).
+    match /productos/{id} {
+      allow read: if activo();
+      allow create, delete: if rol(['admin']);
+      allow update: if rol(['admin']) || (rol(['cajero', 'bodega']) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stock', 'costo']));
+    }
+    match /facturas/{id} {
+      allow read: if activo();
+      allow create: if rol(['admin', 'cajero']);
+      allow update: if rol(['admin']); // solo anular
+    }
+    match /entregas/{id} { allow read: if activo(); allow create: if rol(['admin', 'bodega']); }
+    match /alertas/{id}  { allow read, write: if activo(); }
+    match /config/{id}   { allow read: if activo(); allow write: if rol(['admin', 'cajero']); }
+
+    // Movimientos e historial: se crean, nunca se editan ni se borran.
+    match /movimientos/{id} { allow read: if activo(); allow create: if activo(); }
+    match /historial/{id}   { allow read: if activo(); allow create: if activo(); }
+  }
+}

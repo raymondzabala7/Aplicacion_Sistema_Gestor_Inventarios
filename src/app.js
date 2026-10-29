@@ -173,10 +173,10 @@ function vistaInicio() {
   const frase = bajos.length
     ? `Hay ${bajos.length} producto${bajos.length > 1 ? 's' : ''} bajo el mínimo. ¡Toca reabastecer!`
     : '¡Todo el stock está en orden! Buen trabajo.';
-  const semilla = store.mode === 'firebase' && !s.productos.length && puede('admin');
+  const vacio = !s.productos.length && puede('admin');
 
   return `
-  ${semilla ? `<div class="card banner"><div><b>Tu base de datos está vacía.</b><p class="muted">Carga categorías, proveedores y productos de ejemplo para empezar.</p></div><button class="btn primary" data-act="semilla">Cargar datos de ejemplo</button></div>` : ''}
+  ${vacio ? `<div class="card banner"><div><b>Todavía no hay productos.</b><p class="muted">Empieza creando las categorías y luego los productos.</p></div><button class="btn primary" data-act="ir" data-ruta="productos">Ir a Productos</button></div>` : ''}
   <div class="greet card">
     ${tomi(estado, 'tomi-greet')}
     <div><h2>¡Hola, ${esc(sesion.nombre.split(' ')[0])}!</h2><p>${frase}</p></div>
@@ -647,9 +647,7 @@ const ACCIONES = {
   'demo-login': async d => { try { sesion = await store.login(d.email); ruta = 'inicio'; render(); toast(`¡Bienvenido, ${sesion.nombre.split(' ')[0]}!`, 'celebrando'); } catch (e) { toast(e.message, 'preocupado'); } },
   'salir': async () => { await store.logout(); sesion = null; ui.menu = false; ui.carrito = []; render(); },
   'instalar': async () => { if (!instalador) return; instalador.prompt(); await instalador.userChoice; instalador = null; render(); },
-  'reset': () => { ui.menu = false; render(); confirmar('Reiniciar demo', 'Se borran tus cambios y vuelven los datos de ejemplo.', 'Reiniciar', async () => { await store.reset(); ui.carrito = []; ui.recep = { proveedorId: '', items: [filaVacia()] }; toast('Datos de la demo reiniciados.'); }); },
-  'semilla': async () => { try { await store.reset(); toast('Datos de ejemplo cargados.', 'celebrando'); } catch (e) { toast(e.message, 'preocupado'); } },
-  'modal-cerrar': () => $('#modal').close(),
+  'reset': () => { ui.menu = false; render(); confirmar('Reiniciar demo', 'Se borran tus cambios y vuelven los datos de ejemplo.', 'Reiniciar', async () => { await store.reset(); ui.carrito = []; ui.recep = { proveedorId: '', items: [filaVacia()] }; toast('Datos de la demo reiniciados.'); }); },  'modal-cerrar': () => $('#modal').close(),
   'imprimir': () => window.print(),
 
   'prod-cat': d => { ui.prodCat = d.cat; render(); },
