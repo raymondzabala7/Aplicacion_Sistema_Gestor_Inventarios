@@ -1,6 +1,7 @@
 import { createStore } from './data/store.js';
 import { fmtCant, r3 } from './domain/inventory.js';
 import { tomi } from './ui/tomi.js';
+import { tomi3D } from './ui/tomi3d.js';
 
 const store = createStore();
 
@@ -68,14 +69,37 @@ function render() {
   } catch { /* inputs numéricos no tienen selección */ }
 
   const app = $('#app');
-  if (!sesion) { app.innerHTML = vistaLogin(); return; }
+  if (!sesion) { app.innerHTML = vistaLogin(); ubicarTomi(); return; }
   const r = RUTAS.find(x => x.id === ruta && x.roles.includes(sesion.rol)) || RUTAS[0];
   ruta = r.id;
   app.innerHTML = shell(r, VISTAS[r.id]());
+  ubicarTomi();
 
   if (fid) {
     const el = document.getElementById(fid);
     if (el) { el.focus(); try { if (sel[0] != null) el.setSelectionRange(sel[0], sel[1]); } catch {} }
+  }
+}
+
+// Tomi 3D vive en un solo lienzo: después de cada render se mueve al lugar marcado con data-tomi3d.
+const FRASES_CARGA = ['Cargando el inventario…', 'Contando tomates… 🍅', 'Un momento, reviso los estantes.'];
+const FRASES_LOGIN = [
+  '¡Hola! Soy Tomi 🍅 Entra y revisamos juntos el inventario.',
+  'Cada venta descuenta el stock solita.',
+  'Si un producto se agota, yo te aviso.',
+  '¿Llegó el proveedor? Lo registramos en Recepción.',
+  'Psst… no compartas tu contraseña 🔐',
+  'Un tomate olvidado en bodega es un tomate triste.',
+];
+function ubicarTomi() {
+  const slot = document.querySelector('[data-tomi3d]');
+  if (!slot) return;
+  const lugar = slot.dataset.tomi3d;
+  if (lugar === 'inicio') {
+    // En el panel no hay espacio para el globo: sus reacciones salen como aviso.
+    tomi3D().colocar(slot, { globo: false, alHablar: (texto, enojado) => toast(texto, enojado ? 'preocupado' : 'feliz') });
+  } else {
+    tomi3D().colocar(slot, { frases: lugar === 'login' ? FRASES_LOGIN : FRASES_CARGA });
   }
 }
 
@@ -120,7 +144,7 @@ function vistaLogin() {
   return `
   <div class="login">
     <div class="login-card">
-      <div class="login-hero">${tomi('feliz', 'tomi-login')}<div class="bubble">¡Hola! Soy Tomi. Entra y revisamos juntos el inventario.</div></div>
+      <div class="login-hero" data-tomi3d="login"></div>
       <h1>Fresco<b>Stock</b></h1>
       <p class="muted">Inventario del supermercado</p>
       <form id="login-form" class="stack">
@@ -169,7 +193,6 @@ function vistaInicio() {
   const maxDia = Math.max(1, ...dias.map(d => d.total));
   const porCat = s.categorias.map(c => ({ c, total: sum(semana, f => sum(f.items.filter(l => l.categoriaId === c.id), l => l.cantidad * l.precio)) })).sort((a, b) => b.total - a.total);
   const maxCat = Math.max(1, ...porCat.map(x => x.total));
-  const estado = bajos.length ? 'preocupado' : 'feliz';
   const frase = bajos.length
     ? `Hay ${bajos.length} producto${bajos.length > 1 ? 's' : ''} bajo el mínimo. ¡Toca reabastecer!`
     : '¡Todo el stock está en orden! Buen trabajo.';
@@ -178,7 +201,7 @@ function vistaInicio() {
   return `
   ${vacio ? `<div class="card banner"><div><b>Todavía no hay productos.</b><p class="muted">Empieza creando las categorías y luego los productos.</p></div><button class="btn primary" data-act="ir" data-ruta="productos">Ir a Productos</button></div>` : ''}
   <div class="greet card">
-    ${tomi(estado, 'tomi-greet')}
+    <div class="tomi-greet3d" data-tomi3d="inicio" title="Tomi"></div>
     <div><h2>¡Hola, ${esc(sesion.nombre.split(' ')[0])}!</h2><p>${frase}</p></div>
     <div class="greet-actions">
       ${puede('admin', 'cajero') ? `<button class="btn primary" data-act="ir" data-ruta="caja">${icon('cart')}Nueva venta</button>` : ''}
@@ -787,5 +810,6 @@ window.addEventListener('appinstalled', () => { instalador = null; toast('Fresco
 store.subscribe(() => { if (sesion) render(); });
 const atajo = location.hash.slice(1);
 if (RUTAS.some(r => r.id === atajo)) ruta = atajo; // accesos directos del ícono instalado
+ubicarTomi(); // pantalla de carga mientras Firebase revisa la sesión
 sesion = await store.restoreSession();
 render();

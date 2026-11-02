@@ -16,7 +16,8 @@
     "test": "node --test"
   },
   "dependencies": {
-    "firebase": "^11.10.0"
+    "firebase": "^11.10.0",
+    "three": "^0.128.0"
   },
   "devDependencies": {
     "vite": "^8.3.5"
