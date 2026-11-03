@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 
-// Tomi en 3D (diseño del equipo). Hay una sola escena y su lienzo se mueve entre
-// la pantalla de carga, el login y el inicio, porque la app redibuja el HTML seguido.
+// Tomi en 3D (diseño del equipo). Cada instancia es una escena cuyo lienzo se mueve
+// entre pantallas, porque la app redibuja el HTML seguido: 'logo' vive en la barra
+// lateral y 'vista' pasa por la carga, el login, el inicio, la caja y las alertas.
 
 const FRASES_ENOJO = [
   '¡Ey! ¡Eso duele!',
@@ -15,11 +16,11 @@ const HABLA_CADA_MS = 7000;
 const ENOJO_MS = 2400;
 const elegir = a => a[Math.floor(Math.random() * a.length)];
 
-let instancia = null;
+const instancias = new Map();
 
-export function tomi3D() {
-  instancia ??= crear();
-  return instancia;
+export function tomi3D(clave = 'vista') {
+  if (!instancias.has(clave)) instancias.set(clave, crear());
+  return instancias.get(clave);
 }
 
 function crear() {
@@ -31,7 +32,8 @@ function crear() {
   globo.setAttribute('role', 'status');
   el.append(canvas, globo);
 
-  let opciones = { frases: [], globo: true, alHablar: null };
+  const BASE = { frases: [], globo: true, alHablar: null, estado: 'feliz' };
+  let opciones = { ...BASE };
 
   // ---------- Escena ----------
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
@@ -177,7 +179,8 @@ function crear() {
   }, HABLA_CADA_MS);
 
   // ---------- Animación ----------
-  let anger = 0, blink = 0, nextBlink = 2;
+  // anger: clic; worry y party vienen del estado ('preocupado' o 'celebrando').
+  let anger = 0, worry = 0, party = 0, blink = 0, nextBlink = 2;
   const clock = new THREE.Clock();
   const cNormal = new THREE.Color(0xe0301c), cAngry = new THREE.Color(0xff1f0a);
   const pNormal = new THREE.Color(0xf29bb0), pAngry = new THREE.Color(0xff4a3a);
@@ -189,12 +192,14 @@ function crear() {
     if (!el.isConnected) return; // fuera de pantalla no se dibuja
     const t = clock.getElapsedTime();
     anger += (objetivo - anger) * 0.12;
+    worry += ((opciones.estado === 'preocupado' ? 1 : 0) - worry) * 0.08;
+    party += ((opciones.estado === 'celebrando' ? 1 : 0) - party) * 0.08;
 
     look.x += (mouse.x - look.x) * 0.1; look.y += (mouse.y - look.y) * 0.1;
-    face.rotation.y = look.x * 0.5; face.rotation.x = look.y * 0.32;
+    face.rotation.y = look.x * 0.5; face.rotation.x = look.y * 0.32 + worry * 0.12;
     tomi.rotation.y = look.x * 0.22; tomi.rotation.x = look.y * 0.08;
 
-    const bob = reduce ? 0 : Math.sin(t * 2) * 0.05;
+    const bob = reduce ? 0 : Math.sin(t * 2) * 0.05 + party * Math.abs(Math.sin(t * 5)) * 0.28;
     const shake = anger > 0.5 && !reduce ? Math.sin(t * 55) * 0.05 * anger : 0;
     tomi.position.set(shake, bob, 0);
     const puff = 1 + anger * 0.06 + (reduce ? 0 : Math.sin(t * 2) * 0.012);
@@ -211,13 +216,16 @@ function crear() {
     const bl = 1 - Math.sin(blink * Math.PI) * 0.9;
     eyes.forEach(e => { e.scale.y = bl * (1 - anger * 0.25); });
 
-    // Boca: de sonrisa a ceño
-    mouth.rotation.z = Math.PI * (1 - anger);
-    mouth.position.y = (-0.2 + (-0.5 + 0.2) * anger) - CY;
-    mouth.scale.set(1 - anger * 0.1, 1, 1);
+    // Boca: de sonrisa a ceño (enojado del todo, preocupado a medias)
+    const ceno = Math.max(anger, worry * 0.85);
+    mouth.rotation.z = Math.PI * (1 - ceno);
+    mouth.position.y = (-0.2 + (-0.5 + 0.2) * ceno) - CY;
+    mouth.scale.set(1 - ceno * 0.1 - worry * 0.25, 1, 1);
 
-    const bs = Math.max(0.001, anger);
-    brows.forEach(b => b.scale.set(bs, bs, bs));
+    // Cejas: enojado baja la punta interior; preocupado la sube
+    const bs = Math.max(0.001, anger, worry * 0.8);
+    const lado = anger >= worry ? 1 : -0.7;
+    brows.forEach((b, i) => { b.scale.set(bs, bs, bs); b.rotation.z = (i ? 0.5 : -0.5) * lado; });
 
     // Globo sobre la cabeza
     if (opciones.globo) {
@@ -236,10 +244,11 @@ function crear() {
 
   return {
     el,
-    // Mueve a Tomi dentro de `slot`. frases: lo que dice solo; globo: false para que hable por alHablar.
+    // Mueve a Tomi dentro de `slot`. frases: lo que dice solo; globo: false para que hable por alHablar;
+    // estado: 'feliz', 'preocupado' o 'celebrando'.
     colocar(slot, nuevas = {}) {
       const cambio = opciones.frases !== nuevas.frases;
-      opciones = { frases: [], globo: true, alHablar: null, ...nuevas };
+      opciones = { ...BASE, ...nuevas };
       el.classList.toggle('sin-globo', !opciones.globo);
       if (el.parentNode !== slot) slot.append(el);
       resize();

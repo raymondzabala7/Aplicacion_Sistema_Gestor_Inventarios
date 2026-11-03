@@ -33,20 +33,24 @@ const ICON = {
   edit: '<path d="M4 20h4L19 9l-4-4L4 16v4z"/>', trash: '<path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>', logout: '<path d="M15 4h4v16h-4"/><path d="M10 8l-4 4 4 4"/><path d="M6 12h10"/>',
   download: '<path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M4 20h16"/>', adjust: '<path d="M4 8h10M18 8h2M4 16h2M10 16h10"/><circle cx="16" cy="8" r="2"/><circle cx="8" cy="16" r="2"/>',
+  coin: '<circle cx="12" cy="12" r="9"/><path d="M15 9.5c-.6-1-1.7-1.5-3-1.5-1.7 0-3 .9-3 2s1.3 1.7 3 2 3 .9 3 2-1.3 2-3 2c-1.3 0-2.4-.5-3-1.5"/><path d="M12 6v2M12 16v2"/>',
+  receipt: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/>',
+  calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
   check: '<path d="M5 12l5 5 9-10"/>', print: '<path d="M7 9V3h10v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M7 14h10v7H7z"/>', refresh: '<path d="M20 12a8 8 0 11-3-6.3"/><path d="M20 4v5h-5"/>',
 };
 const icon = (n, c = '') => `<svg class="ic ${c}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n]}</svg>`;
 
 const TODOS = ['admin', 'bodega', 'cajero'];
+// grupo: título de la sección en la barra lateral
 const RUTAS = [
-  { id: 'inicio', label: 'Inicio', icon: 'home', roles: TODOS, titulo: 'Panel general', sub: 'Ventas, entregas y stock de un vistazo' },
-  { id: 'caja', label: 'Caja', icon: 'cart', roles: ['admin', 'cajero'], titulo: 'Caja', sub: 'Arma la venta, factura y el stock se descuenta solo' },
-  { id: 'productos', label: 'Productos', icon: 'box', roles: TODOS, titulo: 'Productos', sub: 'Stock por categoría' },
-  { id: 'recepcion', label: 'Recepción', icon: 'truck', roles: ['admin', 'bodega'], titulo: 'Recepción de proveedores', sub: 'Registra lo que llega y súmalo al stock' },
-  { id: 'proveedores', label: 'Proveedores', icon: 'store', roles: ['admin', 'bodega'], titulo: 'Proveedores', sub: 'Quién nos surte y cuánto ha entregado' },
-  { id: 'alertas', label: 'Alertas', icon: 'bell', roles: TODOS, titulo: 'Alertas', sub: 'Stock bajo, agotados y productos por vencer' },
-  { id: 'historial', label: 'Historial', icon: 'clock', roles: ['admin', 'bodega'], titulo: 'Historial', sub: 'Quién hizo qué y cada movimiento de stock' },
-  { id: 'usuarios', label: 'Usuarios', icon: 'users', roles: ['admin'], titulo: 'Usuarios', sub: 'Empleados, roles y turnos' },
+  { id: 'inicio', label: 'Inicio', icon: 'home', roles: TODOS, grupo: '', titulo: 'Panel general', sub: 'Ventas, entregas y stock de un vistazo' },
+  { id: 'caja', label: 'Caja', icon: 'cart', roles: ['admin', 'cajero'], grupo: 'Operación', titulo: 'Caja', sub: 'Arma la venta, factura y el stock se descuenta solo' },
+  { id: 'recepcion', label: 'Recepción', icon: 'truck', roles: ['admin', 'bodega'], grupo: 'Operación', titulo: 'Recepción de proveedores', sub: 'Registra lo que llega y súmalo al stock' },
+  { id: 'productos', label: 'Productos', icon: 'box', roles: TODOS, grupo: 'Catálogo', titulo: 'Productos', sub: 'Stock por categoría' },
+  { id: 'proveedores', label: 'Proveedores', icon: 'store', roles: ['admin', 'bodega'], grupo: 'Catálogo', titulo: 'Proveedores', sub: 'Quién nos surte y cuánto ha entregado' },
+  { id: 'alertas', label: 'Alertas', icon: 'bell', roles: TODOS, grupo: 'Control', titulo: 'Alertas', sub: 'Stock bajo, agotados y productos por vencer' },
+  { id: 'historial', label: 'Historial', icon: 'clock', roles: ['admin', 'bodega'], grupo: 'Control', titulo: 'Historial', sub: 'Quién hizo qué y cada movimiento de stock' },
+  { id: 'usuarios', label: 'Usuarios', icon: 'users', roles: ['admin'], grupo: 'Control', titulo: 'Usuarios', sub: 'Empleados, roles y turnos' },
 ];
 
 // ---------- estado de la interfaz ----------
@@ -81,26 +85,35 @@ function render() {
   }
 }
 
-// Tomi 3D vive en un solo lienzo: después de cada render se mueve al lugar marcado con data-tomi3d.
-const FRASES_CARGA = ['Cargando el inventario…', 'Contando tomates… 🍅', 'Un momento, reviso los estantes.'];
-const FRASES_LOGIN = [
-  '¡Hola! Soy Tomi 🍅 Entra y revisamos juntos el inventario.',
-  'Cada venta descuenta el stock solita.',
-  'Si un producto se agota, yo te aviso.',
-  '¿Llegó el proveedor? Lo registramos en Recepción.',
-  'Psst… no compartas tu contraseña 🔐',
-  'Un tomate olvidado en bodega es un tomate triste.',
-];
+// Tomi 3D: después de cada render cada lienzo se mueve al lugar marcado con data-tomi3d
+// (data-estado: feliz, preocupado o celebrando). El del logo es otra instancia.
+const FRASES = {
+  carga: ['Cargando el inventario…', 'Contando tomates… 🍅', 'Un momento, reviso los estantes.'],
+  login: [
+    '¡Hola! Soy Tomi 🍅 Entra y revisamos juntos el inventario.',
+    'Cada venta descuenta el stock solita.',
+    'Si un producto se agota, yo te aviso.',
+    '¿Llegó el proveedor? Lo registramos en Recepción.',
+    'Psst… no compartas tu contraseña 🔐',
+    'Un tomate olvidado en bodega es un tomate triste.',
+  ],
+  caja: [
+    '¡Listo para vender! 🛒',
+    'Escanea el código y presiona Enter.',
+    'Los productos por kilo suben de 0,5 en 0,5.',
+    'Toca un producto para agregarlo.',
+  ],
+};
 function ubicarTomi() {
-  const slot = document.querySelector('[data-tomi3d]');
-  if (!slot) return;
-  const lugar = slot.dataset.tomi3d;
-  if (lugar === 'inicio') {
-    // En el panel no hay espacio para el globo: sus reacciones salen como aviso.
-    tomi3D().colocar(slot, { globo: false, alHablar: (texto, enojado) => toast(texto, enojado ? 'preocupado' : 'feliz') });
-  } else {
-    tomi3D().colocar(slot, { frases: lugar === 'login' ? FRASES_LOGIN : FRASES_CARGA });
-  }
+  // Donde no hay espacio para el globo, sus reacciones salen como aviso.
+  const reaccion = (texto, enojado) => toast(texto, enojado ? 'preocupado' : 'feliz');
+  document.querySelectorAll('[data-tomi3d]').forEach(slot => {
+    const lugar = slot.dataset.tomi3d;
+    const estado = slot.dataset.estado || 'feliz';
+    if (lugar === 'logo') tomi3D('logo').colocar(slot, { globo: false, estado, alHablar: reaccion });
+    else if (FRASES[lugar]) tomi3D().colocar(slot, { frases: FRASES[lugar], estado });
+    else tomi3D().colocar(slot, { globo: false, estado, alHablar: reaccion });
+  });
 }
 
 function shell(r, contenido) {
@@ -108,12 +121,15 @@ function shell(r, contenido) {
   const nAlertas = S().alertas.filter(a => !a.atendida).length;
   const link = x => `<button class="nav-link ${x.id === ruta ? 'on' : ''}" data-act="ir" data-ruta="${x.id}" ${x.id === ruta ? 'aria-current="page"' : ''}>
       ${icon(x.icon)}<span>${x.label}</span>${x.id === 'alertas' && nAlertas ? `<em class="nav-badge">${nAlertas}</em>` : ''}</button>`;
+  const grupos = [...new Set(rutas.map(x => x.grupo))];
+  const hoy = new Date().toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' });
   return `
   <div class="layout">
     <aside class="side">
-      <div class="brand">${tomi('feliz', 'tomi-logo')}<span>Fresco<b>Stock</b></span></div>
-      <nav class="nav">${rutas.map(link).join('')}</nav>
+      <div class="brand"><div class="tomi-logo3d" data-tomi3d="logo" title="Tomi"></div><span>Fresco<b>Stock</b></span></div>
+      <nav class="nav">${grupos.map(g => `<div class="nav-group">${g ? `<span class="nav-title">${g}</span>` : ''}${rutas.filter(x => x.grupo === g).map(link).join('')}</div>`).join('')}</nav>
       <div class="side-foot">
+        <div class="side-user"><span class="avatar">${esc(sesion.nombre[0])}</span><span><b>${esc(sesion.nombre)}</b><small>${ROL[sesion.rol]}</small></span></div>
         <span class="modo ${store.mode}">${store.mode === 'firebase' ? 'Conectado a Firebase' : 'Modo demo · datos en este navegador'}</span>
       </div>
     </aside>
@@ -121,6 +137,7 @@ function shell(r, contenido) {
       <header class="top">
         <div class="top-title"><h1>${r.titulo}</h1><p>${r.sub}</p></div>
         <div class="top-actions">
+          <span class="today">${icon('calendar')}${hoy}</span>
           ${instalador ? `<button class="btn soft sm" data-act="instalar">${icon('download')}<span>Instalar app</span></button>` : ''}
           <button class="icon-btn bell" data-act="ir" data-ruta="alertas" aria-label="Alertas: ${nAlertas}">${icon('bell')}${nAlertas ? `<em>${nAlertas}</em>` : ''}</button>
           <div class="me">
@@ -143,10 +160,19 @@ function vistaLogin() {
   const cuentas = S().usuarios.filter(u => u.activo);
   return `
   <div class="login">
+    <div class="login-shell">
+      <aside class="login-side">
+        <div class="login-hero" data-tomi3d="login"></div>
+        <h2>El inventario del súper, siempre al día.</h2>
+        <ul class="login-points">
+          <li>${icon('box')}Stock por categorías en tiempo real</li>
+          <li>${icon('receipt')}Facturas que descuentan el stock solas</li>
+          <li>${icon('bell')}Avisos cuando algo se agota</li>
+        </ul>
+      </aside>
     <div class="login-card">
-      <div class="login-hero" data-tomi3d="login"></div>
       <h1>Fresco<b>Stock</b></h1>
-      <p class="muted">Inventario del supermercado</p>
+      <p class="muted">Entra con tu cuenta de empleado</p>
       <form id="login-form" class="stack">
         <label class="field"><span>Correo</span><input id="login-email" name="email" type="email" required autocomplete="username" placeholder="tu.correo@super.com"></label>
         ${demo ? '' : '<label class="field"><span>Contraseña</span><input id="login-pass" name="password" type="password" required autocomplete="current-password"></label>'}
@@ -157,6 +183,7 @@ function vistaLogin() {
         <p><b>Modo demo.</b> Entra con un rol para probar:</p>
         <div class="demo-users">${cuentas.map(u => `<button class="btn soft sm" data-act="demo-login" data-email="${esc(u.email)}">${ROL[u.rol]} · ${esc(u.nombre.split(' ')[0])}</button>`).join('')}</div>
       </div>` : ''}
+    </div>
     </div>
   </div>`;
 }
@@ -201,7 +228,7 @@ function vistaInicio() {
   return `
   ${vacio ? `<div class="card banner"><div><b>Todavía no hay productos.</b><p class="muted">Empieza creando las categorías y luego los productos.</p></div><button class="btn primary" data-act="ir" data-ruta="productos">Ir a Productos</button></div>` : ''}
   <div class="greet card">
-    <div class="tomi-greet3d" data-tomi3d="inicio" title="Tomi"></div>
+    <div class="tomi-greet3d" data-tomi3d="inicio" data-estado="${bajos.length ? 'preocupado' : 'feliz'}" title="Tomi"></div>
     <div><h2>¡Hola, ${esc(sesion.nombre.split(' ')[0])}!</h2><p>${frase}</p></div>
     <div class="greet-actions">
       ${puede('admin', 'cajero') ? `<button class="btn primary" data-act="ir" data-ruta="caja">${icon('cart')}Nueva venta</button>` : ''}
@@ -210,11 +237,11 @@ function vistaInicio() {
   </div>
 
   <div class="kpis">
-    <div class="kpi"><span>Ventas de hoy</span><b>${money(ventasHoy)}</b><small>${hoy.length} facturas</small></div>
-    <div class="kpi"><span>Ticket promedio</span><b>${money(hoy.length ? ventasHoy / hoy.length : 0)}</b><small>por factura hoy</small></div>
-    <div class="kpi"><span>Recibido en 7 días</span><b>${Math.round(sum(entregas7, e => e.totalUnidades)).toLocaleString('es-CO')} <i>und</i></b><small>${entregas7.length} entregas · ${money(sum(entregas7, e => e.totalCosto))}</small></div>
-    <div class="kpi ${bajos.length ? 'alert' : ''}"><span>Bajo el mínimo</span><b>${bajos.length}</b><small>de ${activos().length} productos</small></div>
-    <div class="kpi"><span>Valor del inventario</span><b>${moneyCorto(valorInv)}</b><small>a precio de costo</small></div>
+    <div class="kpi"><span class="kpi-ic ok">${icon('coin')}</span><span>Ventas de hoy</span><b>${money(ventasHoy)}</b><small>${hoy.length} facturas</small></div>
+    <div class="kpi"><span class="kpi-ic accent">${icon('receipt')}</span><span>Ticket promedio</span><b>${money(hoy.length ? ventasHoy / hoy.length : 0)}</b><small>por factura hoy</small></div>
+    <div class="kpi"><span class="kpi-ic info">${icon('truck')}</span><span>Recibido en 7 días</span><b>${Math.round(sum(entregas7, e => e.totalUnidades)).toLocaleString('es-CO')} <i>und</i></b><small>${entregas7.length} entregas · ${money(sum(entregas7, e => e.totalCosto))}</small></div>
+    <div class="kpi ${bajos.length ? 'alert' : ''}"><span class="kpi-ic bad">${icon('bell')}</span><span>Bajo el mínimo</span><b>${bajos.length}</b><small>de ${activos().length} productos</small></div>
+    <div class="kpi"><span class="kpi-ic warn">${icon('box')}</span><span>Valor del inventario</span><b>${moneyCorto(valorInv)}</b><small>a precio de costo</small></div>
   </div>
 
   <div class="grid-2">
@@ -303,25 +330,26 @@ function vistaCaja() {
     <div class="pos-catalog">
       <label class="search">${icon('search')}<input id="cajaQ" data-bind="cajaQ" value="${esc(ui.cajaQ)}" placeholder="Buscar o escanear código y Enter" aria-label="Buscar producto para vender"></label>
       ${chipsCategorias(ui.cajaCat, 'caja-cat', contar)}
-      <div class="tiles">${lista.map(p => `<button class="tile ${p.stock <= 0 ? 'off' : ''}" data-act="agregar" data-id="${p.id}" ${p.stock <= 0 ? 'disabled' : ''}>
+      <div class="tiles">${lista.map(p => `<button class="tile ${p.stock <= 0 ? 'off' : p.stock <= p.stockMinimo ? 'low' : ''}" data-act="agregar" data-id="${p.id}" ${p.stock <= 0 ? 'disabled' : ''}>
           <span class="tile-emoji">${categoria(p.categoriaId)?.icono ?? '🛒'}</span>
+          ${ui.carrito.some(i => i.productoId === p.id) ? `<em class="tile-count">${fmtCant(ui.carrito.find(i => i.productoId === p.id).cantidad, '').trim()}</em>` : ''}
           <b>${esc(p.nombre)}</b>
           <span class="tile-price">${money(p.precioVenta)}<small>/${p.unidad}</small></span>
           <small class="${p.stock <= p.stockMinimo ? 'warn-t' : 'muted'}">${p.stock <= 0 ? 'Agotado' : 'Quedan ' + fmtCant(p.stock, p.unidad)}</small>
         </button>`).join('') || `<div class="empty">${tomi('preocupado', 'tomi-empty')}<p>Sin resultados.</p></div>`}</div>
     </div>
     <aside class="ticket card">
-      <div class="card-head"><h3>Venta actual</h3><span class="mono muted">${store.numeroSiguiente()}</span></div>
+      <div class="card-head"><h3>Venta actual</h3><span class="ticket-num mono">${store.numeroSiguiente()}</span></div>
       ${lineas.length ? `<ul class="cart">${lineas.map(l => `<li>
           <div class="li-main"><b>${esc(l.p.nombre)}</b><small>${money(l.p.precioVenta)} / ${l.p.unidad}</small></div>
           <div class="qty"><button class="icon-btn sm" data-act="menos" data-id="${l.p.id}" aria-label="Quitar uno">${icon('minus')}</button><span class="num">${fmtCant(l.cantidad, l.p.unidad)}</span><button class="icon-btn sm" data-act="mas" data-id="${l.p.id}" aria-label="Agregar uno">${icon('plus')}</button></div>
           <b class="num">${money(l.cantidad * l.p.precioVenta)}</b>
         </li>`).join('')}</ul>`
-        : `<div class="empty small">${tomi('feliz', 'tomi-empty')}<p>Toca un producto o escanea su código para empezar.</p></div>`}
+        : `<div class="empty small cart-empty"><div class="tomi-caja" data-tomi3d="caja" title="Tomi"></div><p>Toca un producto o escanea su código para empezar.</p></div>`}
       <div class="total"><span>Total <small>IVA incluido</small></span><b class="num">${money(total)}</b></div>
       <div class="row">
         <button class="btn ghost" data-act="vaciar" ${lineas.length ? '' : 'disabled'}>Vaciar</button>
-        <button class="btn accent grow" data-act="cobrar" ${lineas.length ? '' : 'disabled'}>Cobrar y facturar</button>
+        <button class="btn accent grow lg" data-act="cobrar" ${lineas.length ? '' : 'disabled'}>${icon('receipt')}Cobrar y facturar</button>
       </div>
     </aside>
   </div>
@@ -434,7 +462,7 @@ function vistaAlertas() {
   const diasPara = v => Math.round((new Date(v + 'T00:00:00') - inicioDia()) / DIA);
   return `
   <div class="greet card ${activas.length ? 'warn-bg' : ''}">
-    ${tomi(activas.length ? 'preocupado' : 'celebrando', 'tomi-greet')}
+    <div class="tomi-greet3d" data-tomi3d="alertas" data-estado="${activas.length ? 'preocupado' : 'celebrando'}" title="Tomi"></div>
     <div><h2>${activas.length ? `${activas.length} alerta${activas.length > 1 ? 's' : ''} por atender` : '¡Sin alertas pendientes!'}</h2>
     <p>${activas.length ? 'Se crean solas cuando un producto queda en su stock mínimo o se agota, y se cierran solas cuando entra mercancía.' : 'El inventario está sano. Tomi está feliz.'}</p></div>
   </div>
