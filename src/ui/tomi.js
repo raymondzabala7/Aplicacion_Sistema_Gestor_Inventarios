@@ -9,8 +9,8 @@ export function tomi(estado = 'feliz', clase = '') {
     ? '<path d="M50 76 L68 82" stroke="#1B1B1B" stroke-width="4" stroke-linecap="round"/><path d="M110 76 L92 82" stroke="#1B1B1B" stroke-width="4" stroke-linecap="round"/>'
     : '';
   const brazos = estado === 'celebrando'
-    ? '<rect x="14" y="60" width="16" height="10" rx="5" fill="#FF6B4A" transform="rotate(-60 22 65)"/><rect x="130" y="60" width="16" height="10" rx="5" fill="#FF6B4A" transform="rotate(60 138 65)"/>'
-    : '<rect x="18" y="104" width="16" height="10" rx="5" fill="#FF6B4A" transform="rotate(-30 26 109)"/><rect x="126" y="104" width="16" height="10" rx="5" fill="#FF6B4A" transform="rotate(30 134 109)"/>';
+    ? '<g class="tomi-brazo izq"><rect x="14" y="60" width="16" height="10" rx="5" fill="#FF6B4A" transform="rotate(-60 22 65)"/></g><g class="tomi-brazo der"><rect x="130" y="60" width="16" height="10" rx="5" fill="#FF6B4A" transform="rotate(60 138 65)"/></g>'
+    : '<g class="tomi-brazo izq"><rect x="18" y="104" width="16" height="10" rx="5" fill="#FF6B4A" transform="rotate(-30 26 109)"/></g><g class="tomi-brazo der"><rect x="126" y="104" width="16" height="10" rx="5" fill="#FF6B4A" transform="rotate(30 134 109)"/></g>';
   const extra = estado === 'celebrando'
     ? '<g class="tomi-confeti"><rect x="20" y="20" width="8" height="8" rx="2" fill="#FFC94A" transform="rotate(20 24 24)"/><rect x="130" y="30" width="8" height="8" rx="2" fill="#46C285" transform="rotate(-15 134 34)"/><circle cx="140" cy="10" r="4" fill="#3B7DD8"/><circle cx="16" cy="48" r="4" fill="#D93E62"/></g>'
     : estado === 'preocupado'
@@ -19,8 +19,8 @@ export function tomi(estado = 'feliz', clase = '') {
   return `<svg class="tomi tomi-${estado} ${clase}" viewBox="0 0 160 170" role="img" aria-label="Tomi ${estado}">
     ${extra}
     <g class="tomi-cuerpo">
-      <path d="M80 30 C70 10 92 4 96 14 C88 14 84 22 80 30Z" fill="#2FA866"/>
-      <path d="M80 30 C82 14 66 8 60 16 C68 16 74 22 80 30Z" fill="#46C285"/>
+      <g class="tomi-hojas"><path d="M80 30 C70 10 92 4 96 14 C88 14 84 22 80 30Z" fill="#2FA866"/>
+      <path d="M80 30 C82 14 66 8 60 16 C68 16 74 22 80 30Z" fill="#46C285"/></g>
       <rect x="76" y="22" width="6" height="14" rx="3" fill="#6B4A2B"/>
       <ellipse cx="80" cy="96" rx="62" ry="58" fill="#FF6B4A"/>
       <ellipse cx="58" cy="70" rx="14" ry="9" fill="#FFFFFF" opacity=".35"/>

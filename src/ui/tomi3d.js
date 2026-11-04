@@ -30,6 +30,8 @@ function crear() {
   const globo = document.createElement('div');
   globo.className = 'tomi3d-globo';
   globo.setAttribute('role', 'status');
+  canvas.setAttribute('role', 'img');
+  canvas.setAttribute('aria-label', 'Tomi, la mascota de FrescoStock');
   el.append(canvas, globo);
 
   const BASE = { frases: [], globo: true, alHablar: null, estado: 'feliz' };
@@ -74,6 +76,14 @@ function crear() {
     leaf.scale.set(1.15, 0.07, 0.3); leaf.position.set(0.5, 0.08 + (i % 2) * 0.05, 0); leaf.rotation.z = 0.28;
     pivot.add(leaf); crown.add(pivot);
   }
+
+  // Bracitos (pivotan desde el hombro): saludan al llegar y se alzan al celebrar
+  const arms = [-1, 1].map(side => {
+    const pivot = new THREE.Group(); pivot.position.set(side * 1.42, -0.1, 0.1); tomi.add(pivot);
+    const arm = new THREE.Mesh(new THREE.SphereGeometry(0.2, 20, 14), matBody);
+    arm.scale.set(1, 1.7, 1); arm.position.set(side * 0.12, -0.3, 0); pivot.add(arm);
+    return { pivot, side };
+  });
 
   // Cara: grupo que pivota desde el centro del cuerpo para "mirar"
   const face = new THREE.Group(); face.position.y = CY; tomi.add(face);
@@ -187,24 +197,43 @@ function crear() {
   const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   const v = new THREE.Vector3();
 
+  // Solo se dibuja si el lienzo es visible y la pestaña está activa (ahorra CPU/GPU).
+  let visible = true;
+  if ('IntersectionObserver' in window) new IntersectionObserver(es => { visible = es[0].isIntersecting; }).observe(el);
+  let saludoDesde = -10; // instante de la última llegada: dispara el saludo con la manita
+
   function tick() {
     requestAnimationFrame(tick);
-    if (!el.isConnected) return; // fuera de pantalla no se dibuja
+    if (!el.isConnected || !visible || document.hidden) return; // fuera de pantalla no se dibuja
     const t = clock.getElapsedTime();
     anger += (objetivo - anger) * 0.12;
     worry += ((opciones.estado === 'preocupado' ? 1 : 0) - worry) * 0.08;
     party += ((opciones.estado === 'celebrando' ? 1 : 0) - party) * 0.08;
 
-    look.x += (mouse.x - look.x) * 0.1; look.y += (mouse.y - look.y) * 0.1;
+    const mv = reduce ? 0 : 1; // con movimiento reducido no sigue el cursor ni se balancea
+    look.x += (mouse.x * mv - look.x) * 0.1; look.y += (mouse.y * mv - look.y) * 0.1;
     face.rotation.y = look.x * 0.5; face.rotation.x = look.y * 0.32 + worry * 0.12;
     tomi.rotation.y = look.x * 0.22; tomi.rotation.x = look.y * 0.08;
 
     const bob = reduce ? 0 : Math.sin(t * 2) * 0.05 + party * Math.abs(Math.sin(t * 5)) * 0.28;
     const shake = anger > 0.5 && !reduce ? Math.sin(t * 55) * 0.05 * anger : 0;
     tomi.position.set(shake, bob, 0);
+    // Respiración con squash & stretch suave
     const puff = 1 + anger * 0.06 + (reduce ? 0 : Math.sin(t * 2) * 0.012);
     tomi.scale.set(puff, 1 / puff * (1 + anger * 0.03), puff);
-    crown.rotation.z = shake * 2;
+    tomi.rotation.z = reduce ? 0 : Math.sin(t * 0.9) * 0.025 * (1 - party) + party * Math.sin(t * 5) * 0.05; // balanceo
+    crown.rotation.z = shake * 2 + (reduce ? 0 : Math.sin(t * 1.3) * 0.03);
+
+    // Brazos: reposo con balanceo, saludo al llegar, arriba al celebrar, pegados si preocupa
+    const saludo = reduce ? 0 : Math.max(0, 1 - (t - saludoDesde) / 2.2);
+    arms.forEach(({ pivot, side }) => {
+      const reposo = side * (0.35 + Math.sin(t * 2 + side) * 0.04 * mv);
+      const arriba = side * (-2.5 + Math.sin(t * 9) * 0.25 * mv);
+      let z = reposo + (arriba - reposo) * party;
+      if (side > 0) z += (-2.3 + Math.sin(t * 11) * 0.35 - z) * saludo;
+      z += side * worry * 0.25;
+      pivot.rotation.z += (z - pivot.rotation.z) * 0.15;
+    });
 
     matBody.color.copy(cNormal).lerp(cAngry, anger);
     matBody.emissive.setRGB(0.35 * anger * (0.6 + 0.4 * Math.sin(t * 14)), 0, 0);
@@ -250,7 +279,12 @@ function crear() {
       const cambio = opciones.frases !== nuevas.frases;
       opciones = { ...BASE, ...nuevas };
       el.classList.toggle('sin-globo', !opciones.globo);
-      if (el.parentNode !== slot) slot.append(el);
+      if (el.parentNode !== slot) {
+        slot.append(el);
+        // Entrada suave (opacidad/transform) y saludo con la manita en cada llegada
+        el.classList.remove('entra'); void el.offsetWidth; el.classList.add('entra');
+        saludoDesde = clock.getElapsedTime();
+      }
       resize();
       if (cambio && opciones.globo && opciones.frases.length) {
         globo.classList.remove('show');
