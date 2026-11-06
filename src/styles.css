@@ -641,21 +641,24 @@ kbd { background: var(--surface-2); border: 1px solid var(--line); border-radius
 .tut-luz { position: fixed; border-radius: 16px; pointer-events: none; box-shadow: 0 0 0 9999px rgba(12, 9, 7, .58); outline: 3px solid var(--brand); outline-offset: 3px;
   transition: top .35s ease, left .35s ease, width .35s ease, height .35s ease; animation: tut-pulso 1.6s ease-in-out infinite; }
 @keyframes tut-pulso { 50% { outline-color: color-mix(in srgb, var(--brand) 35%, transparent); outline-offset: 7px; } }
-.tut-panel { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); width: min(720px, calc(100vw - 32px)); pointer-events: auto;
-  display: grid; grid-template-columns: 150px minmax(0, 1fr); background: var(--surface); color: var(--ink); border-radius: 20px; overflow: hidden;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, .38); animation: tut-in .25s ease-out; }
-@keyframes tut-in { from { opacity: 0; } } /* solo opacidad: el transform ya centra la tarjeta */
-.tut-panel.arriba { top: 24px; bottom: auto; }
-.tut-panel.izq { left: 24px; transform: none; }
-.tut-panel.der { left: auto; right: 24px; transform: none; }
-#tutorial.sin-foco .tut-panel { top: 50%; bottom: auto; transform: translate(-50%, -50%); }
-.tut-tomi { background: radial-gradient(circle at 50% 60%, var(--brand-soft), var(--surface-2) 70%); min-height: 150px; }
+.tut-panel { position: fixed; width: 430px; pointer-events: auto; display: grid; grid-template-columns: 96px minmax(0, 1fr);
+  background: var(--surface); color: var(--ink); border-radius: 20px; overflow: hidden; box-shadow: 0 24px 60px rgba(0, 0, 0, .38); animation: tut-in .25s ease-out;
+  transition: top .3s ease, left .3s ease; }
+@keyframes tut-in { from { opacity: 0; } } /* solo opacidad: el transform centra la tarjeta */
+/* Apilada (no cabe al lado): más ancha y baja, centrada abajo o arriba */
+.tut-panel.apilado { width: min(700px, calc(100vw - 32px)); left: 50%; transform: translateX(-50%); grid-template-columns: 130px minmax(0, 1fr); }
+.tut-panel.apilado.abajo { bottom: 16px; }
+.tut-panel.apilado.arriba { top: 16px; }
+#tutorial.sin-foco .tut-panel { width: min(640px, calc(100vw - 32px)); left: 50%; top: 50%; transform: translate(-50%, -50%); grid-template-columns: 170px minmax(0, 1fr); }
+.tut-tomi { background: radial-gradient(circle at 50% 60%, var(--brand-soft), var(--surface-2) 70%); min-height: 120px; position: relative; }
+/* El lienzo de Tomi va encima de su celda: si dependiera del alto, la tarjeta crecería sin fin. */
+.tut-tomi > .tomi3d { position: absolute; inset: 0; }
 .tut-body { display: flex; flex-direction: column; gap: 10px; padding: 14px 18px 16px; min-width: 0; }
 .tut-top { display: flex; align-items: center; gap: 10px; }
 .tut-top .icon-btn { margin-left: auto; }
 .tut-card { display: grid; gap: 6px; }
-.tut-card h2 { font-size: 1.3rem; display: flex; align-items: center; gap: 10px; }
-.tut-card p { font-size: 1rem; line-height: 1.55; color: var(--ink); max-width: 62ch; }
+.tut-card h2 { font-size: 1.2rem; line-height: 1.25; display: flex; align-items: center; gap: 10px; }
+.tut-card p { font-size: .98rem; line-height: 1.5; color: var(--ink); max-width: 62ch; }
 .tut-ic { width: 36px; height: 36px; flex: none; border-radius: 11px; display: grid; place-items: center; background: var(--brand-soft); color: var(--brand); }
 .tut-ic .ic { width: 20px; height: 20px; }
 .tut-dots { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -663,13 +666,18 @@ kbd { background: var(--surface-2); border: 1px solid var(--line); border-radius
 .tut-dot.on { width: 24px; background: var(--brand); }
 .tut-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 10px; }
 .tut-spacer { flex: 1; }
+/* Tarjeta al lado (más angosta): botones compactos para que quepan en una línea */
+.tut-panel:not(.apilado) .tut-foot { flex-wrap: nowrap; gap: 6px; }
+.tut-panel:not(.apilado) .tut-foot .btn { padding: 7px 12px; font-size: .88rem; }
+.tut-panel:not(.apilado) .tut-foot .btn.sm span { display: none; }
 @media (max-width: 680px) {
-  .tut-panel { grid-template-columns: 84px minmax(0, 1fr); width: calc(100vw - 16px); bottom: max(8px, env(safe-area-inset-bottom, 0px)); border-radius: 16px; }
-  .tut-panel.arriba { top: max(8px, env(safe-area-inset-top, 0px)); }
-  .tut-tomi { min-height: 84px; }
+  .tut-panel.apilado, #tutorial.sin-foco .tut-panel { grid-template-columns: 72px minmax(0, 1fr); width: calc(100vw - 16px); border-radius: 16px; }
+  .tut-panel.apilado.abajo { bottom: max(8px, env(safe-area-inset-bottom, 0px)); }
+  .tut-panel.apilado.arriba { top: max(8px, env(safe-area-inset-top, 0px)); }
+  .tut-tomi { min-height: 72px; }
   .tut-body { padding: 12px; gap: 8px; }
   .tut-card h2 { font-size: 1.08rem; }
-  .tut-card p { font-size: .92rem; }
+  .tut-card p { font-size: .9rem; line-height: 1.45; }
   .tut-top .pill, .tut-dots { display: none; }
   .tut-foot { padding-top: 8px; flex-wrap: nowrap; gap: 6px; }
   .tut-foot .btn { padding: 8px 11px; font-size: .86rem; }

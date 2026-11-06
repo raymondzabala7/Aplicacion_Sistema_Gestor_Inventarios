@@ -314,22 +314,51 @@ function posicionarTutorial(desplazar = false) {
   const el = p.foco && document.querySelector(p.foco);
   const visible = el && el.getClientRects().length && el.getBoundingClientRect().width > 0;
   t.classList.toggle('sin-foco', !visible);
-  panel.classList.remove('arriba', 'abajo', 'izq', 'der');
+  panel.className = 'tut-panel';
+  panel.removeAttribute('style');
   if (!visible) { luz.hidden = true; return; }
-  // Lo alto (como el catálogo de la caja) se muestra desde arriba; lo pequeño, centrado.
-  if (desplazar) el.scrollIntoView({ block: el.getBoundingClientRect().height > window.innerHeight * 0.6 ? 'start' : 'center', inline: 'nearest' });
-  const r = el.getBoundingClientRect();
+
+  const vw = window.innerWidth, vh = window.innerHeight, M = 16;
+  const bajar = y => { if (desplazar && Math.abs(y) > 1) window.scrollBy({ top: y, behavior: 'instant' }); };
+  let r = el.getBoundingClientRect();
+  let zona; // franja de la pantalla que la tarjeta no tapa: ahí debe quedar lo señalado
+
+  // 1) Al lado: en PC, si a la derecha o a la izquierda cabe la tarjeta, va ahí y no tapa nada.
+  const W = panel.offsetWidth;
+  const lado = vw > 900 && (vw - r.right >= W + 2 * M ? 'der' : r.left >= W + 2 * M ? 'izq' : null);
+  if (lado) {
+    bajar(r.top - Math.max(M, (vh - r.height) / 2));
+    r = el.getBoundingClientRect();
+    const H = panel.offsetHeight;
+    panel.style.left = `${lado === 'der' ? r.right + M : r.left - M - W}px`;
+    panel.style.top = `${Math.min(Math.max(r.top, M), vh - H - M)}px`;
+    zona = [M / 2, vh - M / 2];
+  } else {
+    // 2) Apilada: la tarjeta ancha va abajo y lo señalado se acomoda en el espacio de arriba.
+    panel.classList.add('apilado', 'abajo');
+    const H = panel.offsetHeight;
+    const libre = vh - H - 3 * M;
+    bajar(r.top - (M + Math.max(0, (libre - r.height) / 2)));
+    r = el.getBoundingClientRect();
+    if (r.top > libre + M && r.top > H + 2 * M) {
+      // La página no pudo bajar más (lo señalado está al final): la tarjeta sube.
+      panel.classList.replace('abajo', 'arriba');
+      zona = [H + 2 * M, vh - M / 2];
+    } else {
+      zona = [M / 2, vh - H - 2 * M];
+    }
+  }
+
+  // El recuadro se recorta a la franja visible, así nunca queda debajo de la tarjeta.
   const m = 8;
-  const top = Math.max(r.top - m, 4);
-  const bottom = Math.min(r.bottom + m, window.innerHeight - 4);
-  Object.assign(luz.style, { top: `${top}px`, left: `${Math.max(r.left - m, 4)}px`, width: `${Math.min(r.width + m * 2, window.innerWidth - 8)}px`, height: `${Math.max(bottom - top, 24)}px` });
+  const top = Math.max(r.top - m, zona[0]);
+  const bottom = Math.min(r.bottom + m, zona[1]);
+  Object.assign(luz.style, { top: `${top}px`, left: `${Math.max(r.left - m, 4)}px`, width: `${Math.min(r.width + m * 2, vw - 8)}px`, height: `${Math.max(bottom - top, 24)}px` });
   luz.hidden = false;
-  panel.classList.add(r.top > window.innerHeight * 0.45 ? 'arriba' : 'abajo');
-  // En pantallas anchas, si lo resaltado está a un lado, la tarjeta va al otro.
-  const centroX = (r.left + r.right) / 2;
-  if (window.innerWidth > 1000 && r.width < window.innerWidth * 0.6) panel.classList.add(centroX > window.innerWidth / 2 ? 'izq' : 'der');
 }
-window.addEventListener('resize', () => posicionarTutorial());
+// Al cambiar el tamaño (girar el celular, achicar la ventana) se vuelve a acomodar todo.
+let tutResize = null;
+window.addEventListener('resize', () => { clearTimeout(tutResize); tutResize = setTimeout(() => posicionarTutorial(true), 150); });
 window.addEventListener('scroll', () => posicionarTutorial(), { passive: true });
 
 function irAPaso(i) {
