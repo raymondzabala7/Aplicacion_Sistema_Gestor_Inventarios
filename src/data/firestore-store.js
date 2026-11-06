@@ -4,7 +4,7 @@ import {
   runTransaction, setDoc, updateDoc, where, writeBatch,
 } from 'firebase/firestore';
 import { initializeFirebase } from '../firebase/client.js';
-import { evaluarAlerta, movimientoDe, numeroFactura, planAjuste, planAnulacion, planEntrega, planFactura } from '../domain/inventory.js';
+import { esTarifaIvaValida, evaluarAlerta, movimientoDe, numeroFactura, obtenerIvaProducto, planAjuste, planAnulacion, planEntrega, planFactura } from '../domain/inventory.js';
 
 // Adaptador de Cloud Firestore: misma interfaz que local-store.js.
 
@@ -24,14 +24,33 @@ export function createFirestoreStore() {
   Object.keys(COLECCIONES).forEach(c => { state[c] = []; });
   const subs = new Set();
   let unsubs = [];
+  let ivaMigrado = false;
   const emit = () => subs.forEach(f => f(state));
 
   function escuchar() {
     unsubs.forEach(u => u());
     unsubs = Object.entries(COLECCIONES).map(([col, ord]) => {
       const q = ord ? query(collection(db, col), orderBy(ord[0], 'desc'), limit(ord[1])) : collection(db, col);
-      return onSnapshot(q, snap => { state[col] = snap.docs.map(d => ({ id: d.id, ...d.data() })); emit(); },
-        err => console.error(`No se pudo leer ${col}:`, err));
+      return onSnapshot(q, snap => {
+        if (col === 'productos') {
+          const faltantes = [];
+          state[col] = snap.docs.map(d => {
+            const raw = d.data();
+            const iva = obtenerIvaProducto(raw);
+            if (!esTarifaIvaValida(raw.iva)) faltantes.push({ id: d.id, iva });
+            return { id: d.id, ...raw, iva };
+          });
+          if (!ivaMigrado && faltantes.length > 0) {
+            ivaMigrado = true;
+            const batch = writeBatch(db);
+            faltantes.forEach(({ id, iva }) => batch.update(doc(db, 'productos', id), { iva }));
+            batch.commit().catch(() => { /* si el rol no tiene permiso de escritura, se mantiene en memoria */ });
+          }
+        } else {
+          state[col] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        }
+        emit();
+      }, err => console.error(`No se pudo leer ${col}:`, err));
     });
     unsubs.push(onSnapshot(cfgRef, s => { state.config = { consecutivo: s.data()?.factura ?? 0 }; emit(); }));
   }
@@ -56,7 +75,11 @@ export function createFirestoreStore() {
       const aSnaps = await Promise.all(aRefs.map(r => tx.get(r)));
       const cfg = await tx.get(cfgRef);
       const otros = await Promise.all(otrosRefs.map(r => tx.get(r)));
-      const productos = pSnaps.map(s => (s.exists() ? { id: s.id, ...s.data() } : undefined));
+      const productos = pSnaps.map(s => {
+        if (!s.exists()) return undefined;
+        const d = s.data();
+        return { id: s.id, ...d, iva: obtenerIvaProducto(d) };
+      });
       const op = construir({ productos, consecutivo: cfg.data()?.factura ?? 0, otros });
       const ahora = Date.now();
       op.cambios.forEach(c => {
@@ -113,9 +136,10 @@ export function createFirestoreStore() {
       const ref = doc(collection(db, col));
       if (col === 'productos') {
         const inicial = Number(data.stock) || 0;
-        const producto = { id: ref.id, ...data, stock: 0, activo: true };
+        const iva = obtenerIvaProducto(data);
+        const producto = { id: ref.id, ...data, iva, stock: 0, activo: true };
         const batch = writeBatch(db);
-        batch.set(ref, { ...data, stock: inicial, activo: true, creado: Date.now() });
+        batch.set(ref, { ...data, iva, stock: inicial, activo: true, creado: Date.now() });
         if (inicial > 0) {
           const c = planAjuste({ producto, cantidad: inicial, motivo: 'Stock inicial' });
           batch.set(doc(collection(db, 'movimientos')), movimientoDe(c, 'entrada', 'productos/' + ref.id, usuario, Date.now(), 'Stock inicial'));

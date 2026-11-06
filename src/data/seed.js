@@ -1,4 +1,6 @@
 // Datos de ejemplo para el modo demo (y para poblar Firestore la primera vez).
+import { calcularLineaIVA, calcularResumenIVA, obtenerIvaProducto } from '../domain/iva.js';
+
 const DIA_SEED = 24 * 60 * 60 * 1000;
 
 const CATEGORIAS = [
@@ -17,28 +19,28 @@ const PROVEEDORES = [
   { id: 'prov-limpio', nombre: 'Limpio Hogar S.A.S.', nit: '900555111-2', telefono: '604 555 0177', contacto: 'Andrés Vélez', categorias: ['aseo'] },
 ];
 
-// [id, nombre, categoría, unidad, precio venta, costo, stock, mínimo, código]
+// [id, nombre, categoría, unidad, precio venta, costo, stock, mínimo, código, iva (0 | 5 | 19)]
 const PRODUCTOS = [
-  ['leche-1l', 'Leche entera 1 L', 'lacteos', 'und', 4900, 3600, 48, 20, '7702001012345'],
-  ['yogur-fresa', 'Yogur de fresa 1 L', 'lacteos', 'und', 8900, 6200, 14, 10, '7702001014561'],
-  ['queso-campesino', 'Queso campesino 500 g', 'lacteos', 'und', 12500, 9400, 9, 8, '7702001019870'],
-  ['mantequilla', 'Mantequilla 250 g', 'lacteos', 'und', 7800, 5600, 22, 10, '7702001011122'],
-  ['tomate', 'Tomate chonto', 'frutas', 'kg', 3500, 2200, 6, 10, '2000000000011'],
-  ['banano', 'Banano', 'frutas', 'kg', 2800, 1600, 35, 12, '2000000000028'],
-  ['papa', 'Papa pastusa', 'frutas', 'kg', 2600, 1500, 80, 25, '2000000000035'],
-  ['aguacate', 'Aguacate Hass', 'frutas', 'und', 3200, 2100, 18, 15, '2000000000042'],
-  ['pan-tajado', 'Pan tajado 600 g', 'panaderia', 'und', 6900, 4800, 25, 10, '7702003330011'],
-  ['arepas', 'Arepas de maíz x10', 'panaderia', 'und', 5200, 3500, 30, 12, '7702003330028'],
-  ['arroz', 'Arroz 500 g', 'granos', 'und', 2900, 2000, 0, 30, '7702004440013'],
-  ['frijol', 'Fríjol cargamanto 500 g', 'granos', 'und', 6400, 4700, 40, 15, '7702004440020'],
-  ['aceite', 'Aceite vegetal 1 L', 'granos', 'und', 11900, 9200, 27, 12, '7702004440037'],
-  ['cafe', 'Café molido 250 g', 'granos', 'und', 9800, 7300, 33, 12, '7702004440044'],
-  ['agua', 'Agua 600 ml', 'bebidas', 'und', 1800, 900, 96, 40, '7702005550016'],
-  ['gaseosa', 'Gaseosa cola 1.5 L', 'bebidas', 'und', 5600, 3900, 42, 20, '7702005550023'],
-  ['jugo-naranja', 'Jugo de naranja 1 L', 'bebidas', 'und', 6200, 4300, 11, 12, '7702005550030'],
-  ['jabon', 'Jabón en barra', 'aseo', 'und', 3400, 2300, 120, 30, '7702006660019'],
-  ['detergente', 'Detergente 1 kg', 'aseo', 'und', 13900, 10100, 24, 10, '7702006660026'],
-  ['papel', 'Papel higiénico x4', 'aseo', 'und', 7600, 5400, 50, 20, '7702006660033'],
+  ['leche-1l', 'Leche entera 1 L', 'lacteos', 'und', 4900, 3600, 48, 20, '7702001012345', 0],
+  ['yogur-fresa', 'Yogur de fresa 1 L', 'lacteos', 'und', 8900, 6200, 14, 10, '7702001014561', 19],
+  ['queso-campesino', 'Queso campesino 500 g', 'lacteos', 'und', 12500, 9400, 9, 8, '7702001019870', 0],
+  ['mantequilla', 'Mantequilla 250 g', 'lacteos', 'und', 7800, 5600, 22, 10, '7702001011122', 19],
+  ['tomate', 'Tomate chonto', 'frutas', 'kg', 3500, 2200, 6, 10, '2000000000011', 0],
+  ['banano', 'Banano', 'frutas', 'kg', 2800, 1600, 35, 12, '2000000000028', 0],
+  ['papa', 'Papa pastusa', 'frutas', 'kg', 2600, 1500, 80, 25, '2000000000035', 0],
+  ['aguacate', 'Aguacate Hass', 'frutas', 'und', 3200, 2100, 18, 15, '2000000000042', 0],
+  ['pan-tajado', 'Pan tajado 600 g', 'panaderia', 'und', 6900, 4800, 25, 10, '7702003330011', 0],
+  ['arepas', 'Arepas de maíz x10', 'panaderia', 'und', 5200, 3500, 30, 12, '7702003330028', 0],
+  ['arroz', 'Arroz 500 g', 'granos', 'und', 2900, 2000, 0, 30, '7702004440013', 0],
+  ['frijol', 'Fríjol cargamanto 500 g', 'granos', 'und', 6400, 4700, 40, 15, '7702004440020', 0],
+  ['aceite', 'Aceite vegetal 1 L', 'granos', 'und', 11900, 9200, 27, 12, '7702004440037', 19],
+  ['cafe', 'Café molido 250 g', 'granos', 'und', 9800, 7300, 33, 12, '7702004440044', 5],
+  ['agua', 'Agua 600 ml', 'bebidas', 'und', 1800, 900, 96, 40, '7702005550016', 0],
+  ['gaseosa', 'Gaseosa cola 1.5 L', 'bebidas', 'und', 5600, 3900, 42, 20, '7702005550023', 19],
+  ['jugo-naranja', 'Jugo de naranja 1 L', 'bebidas', 'und', 6200, 4300, 11, 12, '7702005550030', 19],
+  ['jabon', 'Jabón en barra', 'aseo', 'und', 3400, 2300, 120, 30, '7702006660019', 19],
+  ['detergente', 'Detergente 1 kg', 'aseo', 'und', 13900, 10100, 24, 10, '7702006660026', 19],
+  ['papel', 'Papel higiénico x4', 'aseo', 'und', 7600, 5400, 50, 20, '7702006660033', 19],
 ];
 
 const USUARIOS = [
@@ -59,8 +61,19 @@ function rng(seed) {
 export function seed() {
   const rand = rng(42);
   const ahora = Date.now();
-  const productos = PRODUCTOS.map(([id, nombre, categoriaId, unidad, precioVenta, costo, stock, stockMinimo, codigoBarras]) => ({
-    id, nombre, categoriaId, unidad, precioVenta, costo, stock, stockMinimo, codigoBarras, activo: true, creado: ahora - 30 * DIA_SEED,
+  const productos = PRODUCTOS.map(([id, nombre, categoriaId, unidad, precioVenta, costo, stock, stockMinimo, codigoBarras, iva]) => ({
+    id,
+    nombre,
+    categoriaId,
+    unidad,
+    precioVenta,
+    costo,
+    stock,
+    stockMinimo,
+    codigoBarras,
+    iva: iva ?? obtenerIvaProducto({ nombre, categoriaId }),
+    activo: true,
+    creado: ahora - 30 * DIA_SEED,
   }));
   const state = {
     categorias: CATEGORIAS.map(c => ({ ...c })),
@@ -118,12 +131,32 @@ export function seed() {
         if (usados.has(p.id) || p.id === 'arroz') continue;
         usados.add(p.id);
         const cantidad = p.unidad === 'kg' ? 0.5 + Math.floor(rand() * 4) * 0.5 : 1 + Math.floor(rand() * 3);
-        lineas.push({ productoId: p.id, nombre: p.nombre, unidad: p.unidad, categoriaId: p.categoriaId, cantidad, precio: p.precioVenta });
+        const desglose = calcularLineaIVA(cantidad, p.precioVenta, p.iva);
+        lineas.push({
+          productoId: p.id,
+          nombre: p.nombre,
+          unidad: p.unidad,
+          categoriaId: p.categoriaId,
+          cantidad,
+          precio: p.precioVenta,
+          iva: p.iva,
+          subtotalSinIva: desglose.subtotalSinIva,
+          valorIva: desglose.valorIva,
+        });
       }
       if (!lineas.length) continue;
+      const resIva = calcularResumenIVA(lineas, productos);
       state.facturas.push({
-        cajeroId: 'u-caja', cajeroNombre: 'Ana Ríos', fecha,
-        items: lineas, total: lineas.reduce((t, l) => t + Math.round(l.cantidad * l.precio), 0), estado: 'pagada',
+        cajeroId: 'u-caja',
+        cajeroNombre: 'Ana Ríos',
+        fecha,
+        items: lineas,
+        subtotalSinIva: resIva.subtotalSinIva,
+        iva5: resIva.iva5,
+        iva19: resIva.iva19,
+        totalIva: resIva.totalIva,
+        total: resIva.total,
+        estado: 'pagada',
       });
     }
   }

@@ -1,6 +1,28 @@
 // Reglas de negocio puras: no saben si los datos vienen de localStorage o de Firestore.
 // Cada operación devuelve "cambios" de stock que la capa de datos aplica en bloque.
 
+import {
+  OPCIONES_IVA,
+  TARIFAS_IVA,
+  calcularLineaIVA,
+  calcularResumenIVA,
+  esTarifaIvaValida,
+  ivaPorDefectoCategoria,
+  normalizarTarifaIva,
+  obtenerIvaProducto,
+} from './iva.js';
+
+export {
+  OPCIONES_IVA,
+  TARIFAS_IVA,
+  calcularLineaIVA,
+  calcularResumenIVA,
+  esTarifaIvaValida,
+  ivaPorDefectoCategoria,
+  normalizarTarifaIva,
+  obtenerIvaProducto,
+};
+
 export const r3 = x => Math.round(x * 1000) / 1000;
 
 export function fmtCant(cantidad, unidad) {
@@ -39,11 +61,24 @@ export function planFactura({
       throw new Error(`Sin stock suficiente de ${p.nombre}: quedan ${fmtCant(p.stock, p.unidad)}.`);
     }
   });
-  const lineas = items.map((it, n) => ({
-    productoId: productos[n].id, nombre: productos[n].nombre, unidad: productos[n].unidad,
-    categoriaId: productos[n].categoriaId, cantidad: it.cantidad, precio: productos[n].precioVenta,
-  }));
-  const total = lineas.reduce((t, l) => t + Math.round(l.cantidad * l.precio), 0);
+  const lineas = items.map((it, n) => {
+    const p = productos[n];
+    const tarifaIva = obtenerIvaProducto(p);
+    const desglose = calcularLineaIVA(it.cantidad, p.precioVenta, tarifaIva);
+    return {
+      productoId: p.id,
+      nombre: p.nombre,
+      unidad: p.unidad,
+      categoriaId: p.categoriaId,
+      cantidad: it.cantidad,
+      precio: p.precioVenta,
+      iva: tarifaIva,
+      subtotalSinIva: desglose.subtotalSinIva,
+      valorIva: desglose.valorIva,
+    };
+  });
+  const resumenIva = calcularResumenIVA(lineas, productos);
+  const total = resumenIva.total;
 
   const metodo = metodoPago || 'efectivo';
   const recibido = metodo === 'efectivo' && pagaCon != null && pagaCon !== '' ? Number(pagaCon) : total;
@@ -64,6 +99,10 @@ export function planFactura({
     cajeroNombre: usuario.nombre,
     fecha: ahora,
     items: lineas,
+    subtotalSinIva: resumenIva.subtotalSinIva,
+    iva5: resumenIva.iva5,
+    iva19: resumenIva.iva19,
+    totalIva: resumenIva.totalIva,
     total,
     metodoPago: metodo,
     pagaCon: recibido,

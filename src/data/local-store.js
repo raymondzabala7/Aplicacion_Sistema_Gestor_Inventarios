@@ -1,5 +1,5 @@
 import { seed } from './seed.js';
-import { evaluarAlerta, movimientoDe, numeroFactura, planAjuste, planAnulacion, planEntrega, planFactura } from '../domain/inventory.js';
+import { evaluarAlerta, movimientoDe, numeroFactura, obtenerIvaProducto, planAjuste, planAnulacion, planEntrega, planFactura } from '../domain/inventory.js';
 
 // Adaptador de demostración: sus datos solo existen en este navegador.
 
@@ -10,7 +10,17 @@ const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(
 const NOMBRE = { productos: 'producto', proveedores: 'proveedor', usuarios: 'usuario', categorias: 'categoría' };
 
 function load() {
-  try { const raw = localStorage.getItem(KEY); return raw ? JSON.parse(raw) : null; } catch { return null; }
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed?.productos)) {
+      parsed.productos = parsed.productos.map(p => ({ ...p, iva: obtenerIvaProducto(p) }));
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
 }
 
 export function createLocalStore() {
@@ -75,6 +85,7 @@ export function createLocalStore() {
       if (col === 'productos') {
         const inicial = Number(doc.stock) || 0;
         doc.stock = 0; doc.activo = true;
+        doc.iva = obtenerIvaProducto(doc);
         state.productos.push(doc);
         if (inicial > 0) aplicar([planAjuste({ producto: doc, cantidad: inicial, motivo: 'Stock inicial' })], 'entrada', 'productos/' + doc.id, usuario, 'Stock inicial');
         else revisarAlerta(doc);

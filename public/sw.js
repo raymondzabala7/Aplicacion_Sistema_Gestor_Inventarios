@@ -1,5 +1,5 @@
 // Service Worker para FrescoStock PWA
-const CACHE_NAME = 'frescostock-v2';
+const CACHE_NAME = 'frescostock-v4';
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -40,19 +40,14 @@ self.addEventListener('fetch', event => {
     return;
   }
 
+  // Red primero: siempre se sirve la versión más nueva; la caché solo se usa sin conexión.
   event.respondWith(
-    caches.match(req).then(cachedResponse => {
-      const fetchPromise = fetch(req).then(networkResponse => {
-        if (networkResponse && networkResponse.status === 200) {
-          const responseToCache = networkResponse.clone();
-          caches.open(CACHE_NAME).then(cache => {
-            cache.put(req, responseToCache);
-          });
-        }
-        return networkResponse;
-      }).catch(() => cachedResponse);
-
-      return cachedResponse || fetchPromise;
-    })
+    fetch(req).then(networkResponse => {
+      if (networkResponse && networkResponse.status === 200) {
+        const responseToCache = networkResponse.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(req, responseToCache));
+      }
+      return networkResponse;
+    }).catch(() => caches.match(req))
   );
 });

@@ -301,6 +301,16 @@ button { cursor: pointer; }
 .meter i { display: block; height: 100%; border-radius: 999px; }
 .meter i.ok { background: var(--ok); } .meter i.warn { background: var(--warn); } .meter i.bad { background: var(--bad); }
 .who { display: flex; align-items: center; gap: 10px; }
+.prod-img { width: 100%; height: 100%; object-fit: contain; border-radius: inherit; display: block; }
+.tile-emoji, .prod-emoji { overflow: hidden; }
+.tile-emoji { width: 58px !important; height: 58px !important; font-size: 2.4rem !important; background: transparent !important; justify-content: start; place-items: center start; }
+.tile-emoji:has(.prod-img) { background: transparent !important; place-items: center; }
+b > .prod-img { display: inline-block; width: 22px; height: 22px; border-radius: 6px; vertical-align: middle; }
+.prod-emoji.big { width: 64px; height: 64px; }
+.img-field { display: flex; align-items: center; gap: 12px; }
+.img-field > div { display: grid; gap: 6px; min-width: 0; }
+.prod-cell { display: flex; align-items: center; gap: 10px; }
+.prod-emoji { width: 38px; height: 38px; border-radius: 10px; background: var(--surface-2); display: inline-grid; place-items: center; font-size: 1.3rem; flex: none; }
 
 /* ---------- caja ---------- */
 .pos { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 18px; align-items: start; }
@@ -320,7 +330,7 @@ button { cursor: pointer; }
 .tile:active:not(:disabled) { transform: scale(.96); }
 .tile.off { opacity: .5; cursor: not-allowed; }
 .tile.low { border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); }
-.tile-emoji { font-size: 1.5rem; line-height: 1; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; background: var(--surface-2); transition: transform .2s ease; }
+.tile-emoji { font-size: 1.65rem; line-height: 1; width: 46px; height: 46px; display: grid; place-items: center; border-radius: 12px; background: var(--surface-2); transition: transform .2s ease; }
 .tile:hover:not(:disabled) .tile-emoji { transform: scale(1.12); }
 .tile-count { position: absolute; top: 10px; right: 10px; min-width: 26px; height: 26px; padding: 0 7px; border-radius: 999px; display: grid; place-items: center; font-style: normal; font-weight: 700; font-size: .8rem; background: var(--brand); color: var(--brand-ink); box-shadow: 0 2px 8px color-mix(in srgb, var(--brand) 40%, transparent); animation: badge-pulse 1.8s infinite ease-in-out; }
 .tile b { font-size: .9rem; line-height: 1.25; min-height: 2.5em; }
@@ -346,6 +356,10 @@ button { cursor: pointer; }
 .cart-empty { padding-top: 0; }
 .cart-empty p { max-width: 26ch; }
 .tomi-caja { width: 100%; height: 190px; }
+.tax-box { display: grid; gap: 4px; padding: 10px 14px; border-radius: 12px; border: 1px dashed var(--line); background: color-mix(in srgb, var(--surface-2) 55%, transparent); font-size: .84rem; }
+.tax-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; color: var(--muted); }
+.tax-row small { font-size: .74rem; opacity: .85; }
+.tax-row .num { font-weight: 600; color: var(--ink); }
 .total { display: flex; justify-content: space-between; align-items: baseline; padding: 12px 14px; border-radius: 14px; background: var(--surface-2); }
 .total span { font-weight: 600; }
 .total small { color: var(--muted); font-weight: 400; font-size: .78rem; }

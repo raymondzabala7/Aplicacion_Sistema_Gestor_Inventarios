@@ -181,6 +181,63 @@ test('evaluarAlerta genera alertas de stock bajo y agotado y resuelve automátic
   assert.equal(alertaResuelta.resuelta, 'auto');
 });
 
+import { iconoProducto, imagenPorDefectoProducto } from '../src/domain/iconos.js';
+
+test('iconoProducto prioriza icono propio, luego nombre y luego categoría', () => {
+  assert.equal(iconoProducto({ nombre: 'Leche entera 1 L', icono: '🐄' }, '🥛'), '🐄');
+  assert.equal(iconoProducto({ nombre: 'Tomate chonto' }, '🍎'), '🍅');
+  assert.equal(iconoProducto({ nombre: 'Aguacate Hass' }, '🍎'), '🥑');
+  assert.equal(iconoProducto({ nombre: 'Queso campesino 500 g' }, '🥛'), '🧀');
+  assert.equal(iconoProducto({ nombre: 'Croissant x6' }, '🍞'), '🥐');
+  assert.equal(iconoProducto({ nombre: 'Jabón en barra' }, '🧼'), '🧼');
+  assert.equal(iconoProducto({ nombre: 'Producto desconocido' }, '🌾'), '🌾');
+  assert.equal(iconoProducto({ nombre: 'Producto desconocido' }), '🛒');
+});
+
+test('iconoProducto no confunde palabras (fresa≠res, chocolate≠cola, crema dental≠crema)', () => {
+  const casos = {
+    'Yogur de fresa 1 L': '🍓', 'Lenteja 500 g': '🥘', 'Azúcar 1 kg': '🥄', 'Desodorante 150 ml': '💨',
+    'vinagre 1L': '🥗', 'Crema dental 100 ml': '🪥', 'Chocolate de mesa': '🍫', 'Papaya': '🥭',
+    'Pepsi 5L': '🥤', 'Atún en lata 170 g': '🐟', 'Arroz 500 g': '🍚', 'Limón Tahití': '🍋‍🟩',
+    'Leche de almendras 1 L': '🌰', 'Pan tajado de mantequilla 600kg': '🍞', 'Cerveza lager six pack': '🍺',
+    'Té frío limón 1.5 L': '🧋', 'Agua 6 L': '🚰', 'Agua 600 ml': '💧', 'Panela x2': '🍯', 'Lavaloza líquido 500 ml': '🫧',
+  };
+  for (const [nombre, emoji] of Object.entries(casos)) {
+    assert.equal(iconoProducto({ nombre }, '🛒'), emoji, nombre);
+  }
+});
+
+test('imagenPorDefectoProducto asigna la imagen ilustrada a los productos del catálogo', () => {
+  const esperados = {
+    'Yogur griego natural 500 g': './productos/yogur-griego.png',
+    'Panela x2': './productos/panela.png',
+    'Pasta spaghetti 500 g': './productos/pasta.png',
+    'Azúcar 1 kg': './productos/azucar.png',
+    'Café molido 250 g': './productos/cafe.png',
+    'Lenteja 500 g': './productos/lenteja.png',
+    'Detergente en polvo 1 kg': './productos/detergente.png',
+    'vinagre 1L': './productos/vinagre.png',
+    'Cloro 1 L': './productos/cloro.png',
+    'Desodorante 150 ml': './productos/desodorante.png',
+    'Aguacate Hass': './productos/aguacate.png',
+    'Plátano verde': './productos/platano-verde.png',
+    'Banano': './productos/banano.png',
+    'Huevos AA x30': './productos/huevos.png',
+    'Queso campesino 500 g': './productos/queso-campesino.png',
+    'Queso mozzarella 400 g': './productos/queso-mozzarella.png',
+    'Arroz 5 kg': './productos/arroz-5kg.png',
+    'Arroz 500 g': './productos/arroz-500g.png',
+    'Agua 6 L': './productos/agua-6l.png',
+    'Agua 600 ml': './productos/agua-600ml.png',
+    'Pan tajado 600 g': './productos/pan-tajado.png',
+    'Pan integral 500 g': './productos/pan-integral.png',
+  };
+  for (const [nombre, ruta] of Object.entries(esperados)) {
+    assert.equal(imagenPorDefectoProducto({ nombre }), ruta, nombre);
+  }
+  assert.equal(imagenPorDefectoProducto({ nombre: 'Jabón en barra' }), null);
+});
+
 test('generarCSV genera archivo con UTF-8 BOM, separador punto y coma y escapa caracteres especiales', () => {
   const headers = ['Código', 'Nombre', 'Descripción'];
   const rows = [
@@ -226,4 +283,106 @@ test('generarExcelXLSX construye un archivo .xlsx válido con las 10 columnas de
   assert.ok(texto.includes('Código de Barras'));
   assert.ok(texto.includes('Valor Total Stock'));
   assert.ok(texto.includes('Leche entera 1 L'));
+});
+
+import {
+  calcularLineaIVA,
+  calcularResumenIVA,
+  ivaPorDefectoCategoria,
+  obtenerIvaProducto,
+} from '../src/domain/iva.js';
+
+test('obtenerIvaProducto asigna tarifas 0%, 5% y 19% según normativa colombiana', () => {
+  // 0%: Frutas y verduras, huevos, leches simples, arroz, panela, sal, frijol, lenteja, arepas, pan tradicional, agua pura
+  const exentos0 = [
+    { nombre: 'Aguacate Hass', categoriaId: 'frutas' },
+    { nombre: 'Banano', categoriaId: 'frutas' },
+    { nombre: 'Tomate chonto', categoriaId: 'frutas' },
+    { nombre: 'Naranja tangelo', categoriaId: 'frutas' },
+    { nombre: 'Huevos AA x30', categoriaId: 'lacteos' },
+    { nombre: 'Leche entera 1 L', categoriaId: 'lacteos' },
+    { nombre: 'Leche deslactosada 1 L', categoriaId: 'lacteos' },
+    { nombre: 'Arroz 500 g', categoriaId: 'granos' },
+    { nombre: 'Arroz 5 kg', categoriaId: 'granos' },
+    { nombre: 'Panela x2', categoriaId: 'granos' },
+    { nombre: 'Sal 1 kg', categoriaId: 'granos' },
+    { nombre: 'Frijol cargamanto 500 g', categoriaId: 'granos' },
+    { nombre: 'Lenteja 500 g', categoriaId: 'granos' },
+    { nombre: 'Arepas de maíz x10', categoriaId: 'panaderia' },
+    { nombre: 'Pan tajado 600 g', categoriaId: 'panaderia' },
+    { nombre: 'Pan integral 500 g', categoriaId: 'panaderia' },
+    { nombre: 'Agua 600 ml', categoriaId: 'bebidas' },
+    { nombre: 'Agua 6 L', categoriaId: 'bebidas' },
+  ];
+  for (const p of exentos0) {
+    assert.equal(obtenerIvaProducto(p), 0, `Esperaba 0% para ${p.nombre}`);
+  }
+
+  // 5%: Azúcar, café molido, pasta spaghetti, harina de trigo
+  const reducido5 = [
+    { nombre: 'Azúcar 1 kg', categoriaId: 'granos' },
+    { nombre: 'Café molido 250 g', categoriaId: 'granos' },
+    { nombre: 'Pasta spaghetti 500 g', categoriaId: 'granos' },
+    { nombre: 'Harina de trigo 1 kg', categoriaId: 'granos' },
+  ];
+  for (const p of reducido5) {
+    assert.equal(obtenerIvaProducto(p), 5, `Esperaba 5% para ${p.nombre}`);
+  }
+
+  // 19%: Todo Aseo, bebidas procesadas/gaseosas, ultraprocesados, atún en lata, yogures procesados
+  const general19 = [
+    { nombre: 'Detergente en polvo 1 kg', categoriaId: 'aseo' },
+    { nombre: 'Cloro 1 L', categoriaId: 'aseo' },
+    { nombre: 'Desodorante 150 ml', categoriaId: 'aseo' },
+    { nombre: 'Champú 400 ml', categoriaId: 'aseo' },
+    { nombre: 'Jabón en barra', categoriaId: 'aseo' },
+    { nombre: 'Lavaloza líquido 500 ml', categoriaId: 'aseo' },
+    { nombre: 'Suavizante 1 L', categoriaId: 'aseo' },
+    { nombre: 'vinagre 1L', categoriaId: 'granos' },
+    { nombre: 'Gaseosa cola 1.5 L', categoriaId: 'bebidas' },
+    { nombre: 'Gaseosa naranja 1.5 L', categoriaId: 'bebidas' },
+    { nombre: 'Bebida energizante 473 ml', categoriaId: 'bebidas' },
+    { nombre: 'Té frío limón 1.5 L', categoriaId: 'bebidas' },
+    { nombre: 'Cerveza lager six pack', categoriaId: 'bebidas' },
+    { nombre: 'Leche de almendras 1 L', categoriaId: 'bebidas' },
+    { nombre: 'Galletas de soda x6', categoriaId: 'panaderia' },
+    { nombre: 'Ponqué tajado', categoriaId: 'panaderia' },
+    { nombre: 'Croissant x6', categoriaId: 'panaderia' },
+    { nombre: 'Atún en lata 170 g', categoriaId: 'granos' },
+    { nombre: 'Yogur de fresa 1 L', categoriaId: 'lacteos' },
+    { nombre: 'Yogur griego natural 500 g', categoriaId: 'lacteos' },
+  ];
+  for (const p of general19) {
+    assert.equal(obtenerIvaProducto(p), 19, `Esperaba 19% para ${p.nombre}`);
+  }
+});
+
+test('ivaPorDefectoCategoria preselecciona 0% en Frutas y verduras y 19% en Aseo', () => {
+  assert.equal(ivaPorDefectoCategoria('frutas', 'Frutas y verduras'), 0);
+  assert.equal(ivaPorDefectoCategoria('aseo', 'Aseo'), 19);
+});
+
+test('calcularResumenIVA y planFactura desglosan base gravable, IVA 5%, IVA 19% y total final', () => {
+  const prod0 = { id: 'arroz', nombre: 'Arroz 500 g', unidad: 'und', categoriaId: 'granos', precioVenta: 3000, stock: 20, stockMinimo: 5, iva: 0, activo: true };
+  const prod5 = { id: 'cafe', nombre: 'Café molido 250 g', unidad: 'und', categoriaId: 'granos', precioVenta: 10500, stock: 20, stockMinimo: 5, iva: 5, activo: true };
+  const prod19 = { id: 'det', nombre: 'Detergente 1 kg', unidad: 'und', categoriaId: 'aseo', precioVenta: 11900, stock: 20, stockMinimo: 5, iva: 19, activo: true };
+
+  const { factura } = planFactura({
+    productos: [prod0, prod5, prod19],
+    items: [
+      { productoId: 'arroz', cantidad: 1 }, // 3000 -> base 3000, IVA 0
+      { productoId: 'cafe', cantidad: 1 },  // 10500 -> base 10000, IVA 5% = 500
+      { productoId: 'det', cantidad: 1 },   // 11900 -> base 10000, IVA 19% = 1900
+    ],
+    usuario: { id: 'caja', nombre: 'Ana Ríos' },
+    consecutivo: 10,
+    ahora: 5000,
+  });
+
+  assert.equal(factura.subtotalSinIva, 23000);
+  assert.equal(factura.iva5, 500);
+  assert.equal(factura.iva19, 1900);
+  assert.equal(factura.totalIva, 2400);
+  assert.equal(factura.total, 25400);
+  assert.equal(factura.subtotalSinIva + factura.iva5 + factura.iva19, factura.total);
 });

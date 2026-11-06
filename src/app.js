@@ -1,5 +1,15 @@
 import { createStore } from './data/store.js';
-import { descargarCSV, fmtCant, r3 } from './domain/inventory.js';
+import {
+  OPCIONES_IVA,
+  calcularResumenIVA,
+  descargarCSV,
+  fmtCant,
+  ivaPorDefectoCategoria,
+  normalizarTarifaIva,
+  obtenerIvaProducto,
+  r3,
+} from './domain/inventory.js';
+import { iconoProducto as iconoDe, imagenPorDefectoProducto } from './domain/iconos.js';
 import { tomi } from './ui/tomi.js';
 import { tomi3D } from './ui/tomi3d.js';
 import { saludarAlEntrar, alternarSonido, sonidoHabilitado } from './ui/tomi-audio.js';
@@ -20,6 +30,45 @@ const S = () => store.state;
 const activos = () => S().productos.filter(p => p.activo !== false);
 const categoria = id => S().categorias.find(c => c.id === id);
 const ROL = { admin: 'Administrador', bodega: 'Bodega', cajero: 'Cajero' };
+
+// Emoji del producto (propiedad `icono`, mapeo por nombre o emoji de su categoría)
+const iconoProducto = p => iconoDe(p, categoria(p?.categoriaId)?.icono);
+
+// Tarifa de IVA del producto (0%, 5% o 19%) según normativa colombiana
+const ivaDe = p => obtenerIvaProducto(p, categoria(p?.categoriaId)?.nombre);
+const pillIva = p => {
+  const t = ivaDe(p);
+  const cls = t === 0 ? 'ok' : t === 5 ? 'info' : 'warn';
+  return `<span class="pill ${cls}">${t}%</span>`;
+};
+
+// Miniatura del producto: su foto o ilustración incluida si la tiene; si no, el emoji correspondiente.
+function imgProducto(p, alt = '') {
+  const src = imagenPorDefectoProducto(p);
+  if (src) return `<img class="prod-img" src="${esc(src)}" alt="${esc(alt || p?.nombre || '')}" loading="lazy">`;
+  return iconoProducto(p);
+}
+
+// Reduce la foto a un cuadrado de 256 px (JPEG) para que quepa bien en la base de datos.
+function redimensionarImagen(file, lado = 256) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = c.height = lado;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, lado, lado);
+      const m = Math.min(img.width, img.height);
+      ctx.drawImage(img, (img.width - m) / 2, (img.height - m) / 2, m, m, 0, 0, lado, lado);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL('image/jpeg', 0.82));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('No se pudo leer la imagen. Usa un archivo JPG o PNG.')); };
+    img.src = url;
+  });
+}
+
 
 const ICON = {
   home: '<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/>',
@@ -296,7 +345,7 @@ function vistaInicio() {
     <section class="card">
       <div class="card-head"><h3>Stock bajo</h3><button class="link" data-act="ir" data-ruta="alertas">Ver alertas</button></div>
       ${bajos.length ? `<ul class="list">${bajos.slice(0, 6).map(p => `<li>
-        <div class="li-main"><b>${esc(p.nombre)}</b><small>${fmtCant(p.stock, p.unidad)} · mínimo ${fmtCant(p.stockMinimo, p.unidad)}</small></div>
+        <div class="li-main"><b>${imgProducto(p)} ${esc(p.nombre)}</b><small>${fmtCant(p.stock, p.unidad)} · mínimo ${fmtCant(p.stockMinimo, p.unidad)}</small></div>
         ${pillStock(p)}
         ${puede('admin', 'bodega') ? `<button class="btn soft sm" data-act="recibir" data-id="${p.id}">Pedir</button>` : ''}</li>`).join('')}</ul>`
         : `<div class="empty">${tomi('feliz', 'tomi-empty')}<p>Ningún producto bajo el mínimo.</p></div>`}
@@ -335,11 +384,12 @@ function vistaProductos() {
   ${chipsCategorias(ui.prodCat, 'prod-cat', contar)}
   <div class="card flush">
     <div class="table-wrap"><table class="table">
-      <thead><tr><th>Producto</th><th>Categoría</th><th class="r">Precio</th><th>Stock</th><th>Estado</th><th class="r">Acciones</th></tr></thead>
+      <thead><tr><th>Producto</th><th>Categoría</th><th class="r">Precio (IVA incl.)</th><th class="r">IVA</th><th>Stock</th><th>Estado</th><th class="r">Acciones</th></tr></thead>
       <tbody>${lista.map(p => `<tr>
-        <td><b>${esc(p.nombre)}</b><small class="mono block">${esc(p.codigoBarras)}</small></td>
+        <td><div class="prod-cell"><span class="prod-emoji">${imgProducto(p)}</span><div><b>${esc(p.nombre)}</b><small class="mono block">${esc(p.codigoBarras)}</small></div></div></td>
         <td>${categoria(p.categoriaId)?.icono ?? ''} ${esc(categoria(p.categoriaId)?.nombre ?? 'Sin categoría')}</td>
         <td class="r num">${money(p.precioVenta)}<small class="block muted">/${p.unidad}</small></td>
+        <td class="r">${pillIva(p)}</td>
         <td class="stock-cell"><span class="num">${fmtCant(p.stock, p.unidad)}</span>${barraStock(p)}<small class="muted">mín. ${p.stockMinimo}</small></td>
         <td>${pillStock(p)}</td>
         <td class="r actions">
@@ -357,7 +407,8 @@ function vistaCaja() {
   const lista = filtrar(activos(), ui.cajaCat, ui.cajaQ).sort((a, b) => a.nombre.localeCompare(b.nombre));
   const contar = c => activos().filter(p => c === 'todas' || p.categoriaId === c).length;
   const lineas = ui.carrito.map(it => ({ ...it, p: s.productos.find(p => p.id === it.productoId) })).filter(l => l.p);
-  const total = sum(lineas, l => Math.round(l.cantidad * l.p.precioVenta));
+  const resumenIva = calcularResumenIVA(lineas, s.productos);
+  const total = resumenIva.total;
   const hoy0 = inicioDia();
   const hoy = s.facturas.filter(f => f.fecha >= hoy0);
   return `
@@ -370,22 +421,27 @@ function vistaCaja() {
       <div class="kbd-hint">Atajos: <kbd>F2</kbd> Buscar · <kbd>F4</kbd> Cobrar · <kbd>Esc</kbd> Vaciar</div>
       ${chipsCategorias(ui.cajaCat, 'caja-cat', contar)}
       <div class="tiles">${lista.map(p => `<button class="tile ${p.stock <= 0 ? 'off' : p.stock <= p.stockMinimo ? 'low' : ''}" data-act="agregar" data-id="${p.id}" ${p.stock <= 0 ? 'disabled' : ''}>
-          <span class="tile-emoji">${categoria(p.categoriaId)?.icono ?? '🛒'}</span>
+          <span class="tile-emoji">${imgProducto(p)}</span>
           ${ui.carrito.some(i => i.productoId === p.id) ? `<em class="tile-count">${fmtCant(ui.carrito.find(i => i.productoId === p.id).cantidad, '').trim()}</em>` : ''}
           <b>${esc(p.nombre)}</b>
-          <span class="tile-price">${money(p.precioVenta)}<small>/${p.unidad}</small></span>
+          <span class="tile-price">${money(p.precioVenta)}<small>/${p.unidad} · IVA ${ivaDe(p)}%</small></span>
           <small class="${p.stock <= p.stockMinimo ? 'warn-t' : 'muted'}">${p.stock <= 0 ? 'Agotado' : 'Quedan ' + fmtCant(p.stock, p.unidad)}</small>
         </button>`).join('') || `<div class="empty">${tomi('preocupado', 'tomi-empty')}<p>Sin resultados.</p></div>`}</div>
     </div>
     <aside class="ticket card">
       <div class="card-head"><h3>Venta actual</h3><span class="ticket-num mono">${store.numeroSiguiente()}</span></div>
       ${lineas.length ? `<ul class="cart">${lineas.map(l => `<li>
-          <div class="li-main"><b>${esc(l.p.nombre)}</b><small>${money(l.p.precioVenta)} / ${l.p.unidad}</small></div>
+          <div class="li-main"><b>${imgProducto(l.p)} ${esc(l.p.nombre)}</b><small>${money(l.p.precioVenta)} / ${l.p.unidad} · IVA ${ivaDe(l.p)}%</small></div>
           <div class="qty"><button class="icon-btn sm" data-act="menos" data-id="${l.p.id}" aria-label="Quitar uno">${icon('minus')}</button><span class="num">${fmtCant(l.cantidad, l.p.unidad)}</span><button class="icon-btn sm" data-act="mas" data-id="${l.p.id}" aria-label="Agregar uno">${icon('plus')}</button></div>
           <b class="num">${money(l.cantidad * l.p.precioVenta)}</b>
         </li>`).join('')}</ul>`
         : `<div class="empty small cart-empty"><div class="tomi-caja" data-tomi3d="caja" title="Tomi"></div><p>Toca un producto o escanea su código para empezar.</p></div>`}
-      <div class="total"><span>Total <small>IVA incluido</small></span><b class="num">${money(total)}</b></div>
+      <div class="tax-box">
+        <div class="tax-row"><span>Subtotal sin IVA <small>(base gravable)</small></span><span class="num">${money(resumenIva.subtotalSinIva)}</span></div>
+        <div class="tax-row"><span>Total IVA 5%</span><span class="num">${money(resumenIva.iva5)}</span></div>
+        <div class="tax-row"><span>Total IVA 19%</span><span class="num">${money(resumenIva.iva19)}</span></div>
+      </div>
+      <div class="total"><span>Total a pagar <small>IVA incluido</small></span><b class="num">${money(total)}</b></div>
       <div class="row">
         <button class="btn ghost" data-act="vaciar" ${lineas.length ? '' : 'disabled'}>Vaciar</button>
         <button class="btn accent grow lg" data-act="cobrar" ${lineas.length ? '' : 'disabled'}>${icon('receipt')}Cobrar y facturar <small class="kbd" style="font-size:.7rem;margin-left:4px;opacity:.8">(F4)</small></button>
@@ -645,24 +701,42 @@ const campo = (label, input, ayuda = '') => `<label class="field"><span>${label}
 function formProducto(p) {
   const s = S();
   const nuevo = !p;
-  p = p || { nombre: '', codigoBarras: '', categoriaId: ui.prodCat !== 'todas' ? ui.prodCat : s.categorias[0]?.id, unidad: 'und', precioVenta: '', costo: '', stockMinimo: 10, stock: 0 };
+  const catInicial = p?.categoriaId || (ui.prodCat !== 'todas' ? ui.prodCat : s.categorias[0]?.id);
+  const nomCatInicial = categoria(catInicial)?.nombre || '';
+  const ivaInicial = nuevo ? ivaPorDefectoCategoria(catInicial, nomCatInicial) : ivaDe(p);
+  p = p || { nombre: '', codigoBarras: '', categoriaId: catInicial, unidad: 'und', precioVenta: '', costo: '', stockMinimo: 10, stock: 0, icono: '', iva: ivaInicial };
   abrirModal({
     titulo: nuevo ? 'Nuevo producto' : 'Editar producto', enviar: nuevo ? 'Crear producto' : 'Guardar cambios',
     cuerpo: `<div class="form-grid">
       ${campo('Nombre', `<input name="nombre" required value="${esc(p.nombre)}" placeholder="Leche entera 1 L">`)}
+      ${campo('Imagen del producto', `<div class="img-field"><span class="prod-emoji big" id="img-preview">${imgProducto(p)}</span><div><input name="imagen" type="file" accept="image/*" id="img-input">${p.imagen ? '<label class="small"><input type="checkbox" name="quitarImagen"> Quitar imagen actual</label>' : ''}</div></div>`, 'JPG o PNG; se recorta en cuadrado')}
+      ${campo('Ícono / Emoji', `<input name="icono" maxlength="4" value="${esc(p.icono || '')}" placeholder="${iconoProducto(p)}">`, 'Se elige solo según el nombre si lo dejas vacío')}
       ${campo('Código de barras', `<input name="codigoBarras" required inputmode="numeric" pattern="[0-9]{8,14}" value="${esc(p.codigoBarras)}" placeholder="7702001012345">`, 'EAN-13: 8 a 14 dígitos')}
-      ${campo('Categoría', `<select name="categoriaId" required>${s.categorias.map(c => opt(c.id, `${c.icono} ${c.nombre}`, p.categoriaId)).join('')}</select>`)}
+      ${campo('Categoría', `<select name="categoriaId" id="prod-categoria" required>${s.categorias.map(c => opt(c.id, `${c.icono} ${c.nombre}`, p.categoriaId)).join('')}</select>`)}
+      ${campo('Tarifa de IVA', `<select name="iva" id="prod-iva" required>${OPCIONES_IVA.map(o => opt(o.valor, o.etiqueta, ivaInicial)).join('')}</select>`, 'Frutas y verduras: 0% · Aseo: 19%')}
       ${campo('Unidad', `<select name="unidad">${opt('und', 'Unidad (und)', p.unidad)}${opt('kg', 'Kilogramo (kg)', p.unidad)}${opt('lt', 'Litro (lt)', p.unidad)}</select>`)}
-      ${campo('Precio de venta', `<input name="precioVenta" type="number" min="0" step="50" required value="${esc(p.precioVenta)}">`)}
+      ${campo('Precio de venta (IVA incluido)', `<input name="precioVenta" type="number" min="0" step="50" required value="${esc(p.precioVenta)}">`)}
       ${campo('Costo', `<input name="costo" type="number" min="0" step="50" required value="${esc(p.costo)}">`)}
       ${campo('Stock mínimo', `<input name="stockMinimo" type="number" min="0" step="any" required value="${esc(p.stockMinimo)}">`, 'Al llegar aquí se crea una alerta')}
       ${nuevo ? campo('Stock inicial', `<input name="stock" type="number" min="0" step="any" value="0">`, 'Queda registrado como entrada') : campo('Stock actual', `<input value="${fmtCant(p.stock, p.unidad)}" disabled>`, 'Cambia con entregas, ventas o ajustes')}
     </div>`,
     onSubmit: async fd => {
+      const iconoTxt = (fd.get('icono') || '').trim();
+      const ivaSeleccionado = normalizarTarifaIva(fd.get('iva'), 19);
       const data = {
-        nombre: fd.get('nombre').trim(), codigoBarras: fd.get('codigoBarras').trim(), categoriaId: fd.get('categoriaId'), unidad: fd.get('unidad'),
-        precioVenta: Number(fd.get('precioVenta')), costo: Number(fd.get('costo')), stockMinimo: Number(fd.get('stockMinimo')),
+        nombre: fd.get('nombre').trim(),
+        codigoBarras: fd.get('codigoBarras').trim(),
+        categoriaId: fd.get('categoriaId'),
+        unidad: fd.get('unidad'),
+        precioVenta: Number(fd.get('precioVenta')),
+        costo: Number(fd.get('costo')),
+        stockMinimo: Number(fd.get('stockMinimo')),
+        iva: ivaSeleccionado,
+        ...(iconoTxt ? { icono: iconoTxt } : {}),
       };
+      const archivo = fd.get('imagen');
+      if (archivo && archivo.size) data.imagen = await redimensionarImagen(archivo);
+      else if (fd.get('quitarImagen')) data.imagen = '';
       const dup = activos().find(x => x.codigoBarras === data.codigoBarras && x.id !== p.id);
       if (dup) throw new Error(`Ese código de barras ya es de "${dup.nombre}".`);
       if (nuevo) { await store.add('productos', { ...data, stock: Number(fd.get('stock')) || 0 }, sesion); toast(`Producto "${data.nombre}" creado.`, 'celebrando'); }
@@ -749,8 +823,7 @@ function formUsuario(u) {
 
 function htmlFactura(f) {
   const metodosNom = { efectivo: 'Efectivo', transferencia: 'Transferencia / QR', tarjeta: 'Tarjeta Débito/Crédito' };
-  const subtotal = Math.round(f.total / 1.19);
-  const iva = f.total - subtotal;
+  const resumenIva = calcularResumenIVA(f.items, S().productos);
   const cliente = f.cliente || { nombre: 'Consumidor Final', documento: '222222222222' };
   const metodo = metodosNom[f.metodoPago] || f.metodoPago || 'Efectivo';
 
@@ -775,14 +848,15 @@ function htmlFactura(f) {
     </div>
 
     <table class="inv-table">
-      <thead><tr><th>Producto</th><th class="r">Cant.</th><th class="r">Precio</th><th class="r">Subtotal</th></tr></thead>
-      <tbody>${f.items.map(l => `<tr><td>${esc(l.nombre)}</td><td class="r">${fmtCant(l.cantidad, l.unidad)}</td><td class="r">${money(l.precio)}</td><td class="r">${money(l.cantidad * l.precio)}</td></tr>`).join('')}</tbody>
+      <thead><tr><th>Producto</th><th class="r">Cant.</th><th class="r">IVA</th><th class="r">Precio</th><th class="r">Total</th></tr></thead>
+      <tbody>${f.items.map((l, idx) => `<tr><td>${esc(l.nombre)}</td><td class="r">${fmtCant(l.cantidad, l.unidad)}</td><td class="r">${resumenIva.lineas[idx]?.iva ?? 0}%</td><td class="r">${money(l.precio)}</td><td class="r">${money(l.cantidad * l.precio)}</td></tr>`).join('')}</tbody>
     </table>
 
     <div class="inv-calc">
-      <div class="inv-calc-row"><span class="muted">Subtotal (sin IVA):</span><span class="num">${money(subtotal)}</span></div>
-      <div class="inv-calc-row"><span class="muted">IVA estimado (19%):</span><span class="num">${money(iva)}</span></div>
-      <div class="inv-total"><span>Total a pagar:</span><b class="num">${money(f.total)}</b></div>
+      <div class="inv-calc-row"><span class="muted">Subtotal sin IVA (base gravable):</span><span class="num">${money(resumenIva.subtotalSinIva)}</span></div>
+      <div class="inv-calc-row"><span class="muted">Total IVA 5%:</span><span class="num">${money(resumenIva.iva5)}</span></div>
+      <div class="inv-calc-row"><span class="muted">Total IVA 19%:</span><span class="num">${money(resumenIva.iva19)}</span></div>
+      <div class="inv-total"><span>Total final a pagar:</span><b class="num">${money(resumenIva.total)}</b></div>
 
       <div class="inv-calc-row" style="margin-top: 4px; padding-top: 6px; border-top: 1px dashed var(--line);">
         <span>Medio de pago:</span><b>${metodo}</b>
@@ -812,7 +886,9 @@ function verFactura(f, recienCreada) {
 
 function formCobro(total) {
   let metodo = 'efectivo';
-  let pagaCon = total;
+  const lineas = ui.carrito.map(it => ({ ...it, p: S().productos.find(p => p.id === it.productoId) })).filter(l => l.p);
+  const resumenIva = calcularResumenIVA(lineas, S().productos);
+  total = resumenIva.total || total;
 
   const actualizarCambio = () => {
     const inputPaga = $('#cobro-paga');
@@ -830,8 +906,13 @@ function formCobro(total) {
     enviar: 'Confirmar y Facturar',
     clase: 'wide',
     cuerpo: `
+      <div class="tax-box">
+        <div class="tax-row"><span>Subtotal sin IVA <small>(base gravable)</small></span><span class="num">${money(resumenIva.subtotalSinIva)}</span></div>
+        <div class="tax-row"><span>Total IVA 5%</span><span class="num">${money(resumenIva.iva5)}</span></div>
+        <div class="tax-row"><span>Total IVA 19%</span><span class="num">${money(resumenIva.iva19)}</span></div>
+      </div>
       <div class="total" style="font-size: 1.25rem; margin-bottom: 8px;">
-        <span>Total a cobrar</span>
+        <span>Total final a pagar <small>(IVA incluido)</small></span>
         <b class="num" style="font-size: 1.8rem; color: var(--brand);">${money(total)}</b>
       </div>
       
@@ -1261,6 +1342,17 @@ document.addEventListener('input', e => {
   }
 });
 document.addEventListener('change', e => {
+  if (e.target.id === 'img-input' && e.target.files?.[0]) {
+    const prev = $('#img-preview');
+    if (prev) prev.innerHTML = `<img class="prod-img" alt="Vista previa" src="${URL.createObjectURL(e.target.files[0])}">`;
+  }
+  if (e.target.id === 'prod-categoria') {
+    const cat = categoria(e.target.value);
+    const selectIva = $('#prod-iva');
+    if (selectIva) {
+      selectIva.value = String(ivaPorDefectoCategoria(e.target.value, cat?.nombre || ''));
+    }
+  }
   if (e.target.matches('[data-recprov]')) { ui.recep.proveedorId = e.target.value; render(); }
 });
 
