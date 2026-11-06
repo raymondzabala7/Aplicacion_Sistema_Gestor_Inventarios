@@ -239,6 +239,8 @@ function crear() {
   let visible = true;
   if ('IntersectionObserver' in window) new IntersectionObserver(es => { visible = es[0].isIntersecting; }).observe(el);
   let saludoDesde = -10; // instante de la última llegada: dispara el saludo con la manita
+  let ultimoLugar = null; // data-tomi3d del lugar donde está ahora (caja, inicio, alertas…)
+  let quitarEntra = null;
 
   function tick() {
     requestAnimationFrame(tick);
@@ -324,9 +326,18 @@ function crear() {
       el.classList.toggle('sin-globo', !opciones.globo);
       if (el.parentNode !== slot) {
         slot.append(el);
-        // Entrada suave (opacidad/transform) y saludo con la manita en cada llegada
-        el.classList.remove('entra'); void el.offsetWidth; el.classList.add('entra');
-        saludoDesde = clock.getElapsedTime();
+        // Entrada suave y saludo solo al llegar a otro lugar (otra pantalla); si la app
+        // redibuja la misma pantalla, Tomi se queda quieto y no parece que todo recargó.
+        const lugar = slot.dataset.tomi3d || '';
+        if (lugar !== ultimoLugar) {
+          el.classList.remove('entra'); void el.offsetWidth; el.classList.add('entra');
+          // Mover un elemento en la página reinicia sus animaciones CSS: se quita la clase al
+          // terminar para que el próximo redibujo no lo haga "entrar" otra vez.
+          clearTimeout(quitarEntra);
+          quitarEntra = setTimeout(() => el.classList.remove('entra'), 700); // dura .6s
+          saludoDesde = clock.getElapsedTime();
+        }
+        ultimoLugar = lugar;
       }
       resize();
       if (cambio && opciones.globo && opciones.frases.length) {

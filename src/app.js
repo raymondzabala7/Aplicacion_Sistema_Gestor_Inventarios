@@ -46,7 +46,8 @@ const pillIva = p => {
 // Miniatura del producto: su foto o ilustración incluida si la tiene; si no, el emoji correspondiente.
 function imgProducto(p, alt = '') {
   const src = imagenPorDefectoProducto(p);
-  if (src) return `<img class="prod-img" src="${esc(src)}" alt="${esc(alt || p?.nombre || '')}" loading="lazy">`;
+  // Sin loading="lazy": al redibujar, una imagen perezosa queda un instante en blanco y parpadea.
+  if (src) return `<img class="prod-img" src="${esc(src)}" alt="${esc(alt || p?.nombre || '')}">`;
   return iconoProducto(p);
 }
 
@@ -122,7 +123,19 @@ const ui = {
 const puede = (...roles) => roles.includes(sesion?.rol);
 
 // ---------- render ----------
+let rutaPintada = null; // la pantalla que está dibujada ahora
+
+// Firebase avisa por separado de cada colección que cambia (una venta toca facturas, productos,
+// movimientos, alertas…): se juntan esos avisos en un solo redibujo.
+let renderPendiente = null;
+function programarRender() {
+  if (renderPendiente) return;
+  renderPendiente = setTimeout(() => { renderPendiente = null; render(); }, 40);
+}
+
 function render() {
+  clearTimeout(renderPendiente);
+  renderPendiente = null;
   let fid = null, sel = null;
   try {
     const a = document.activeElement;
@@ -130,10 +143,18 @@ function render() {
   } catch { /* inputs numéricos no tienen selección */ }
 
   const app = $('#app');
-  if (!sesion) { app.innerHTML = vistaLogin(); ubicarTomi(); return; }
+  if (!sesion) { app.innerHTML = vistaLogin(); ubicarTomi(); rutaPintada = null; return; }
   const r = RUTAS.find(x => x.id === ruta && x.roles.includes(sesion.rol)) || RUTAS[0];
   ruta = r.id;
+  // Las animaciones de entrada solo corren al cambiar de pantalla. Si es la misma pantalla
+  // (un clic, una venta, un aviso de Firebase), se redibuja "quieta" y sin saltar de posición.
+  const mismaPantalla = rutaPintada === r.id && Boolean($('.layout'));
+  const y = window.scrollY;
+  app.classList.toggle('quieto', mismaPantalla);
   app.innerHTML = shell(r, VISTAS[r.id]());
+  rutaPintada = r.id;
+  ui.recienAgregado = null;
+  if (mismaPantalla && window.scrollY !== y) window.scrollTo({ top: y, behavior: 'instant' });
   ubicarTomi();
   posicionarTutorial(); // la pantalla se redibujó: el resaltado sigue a su parte
 
@@ -608,7 +629,7 @@ function vistaCaja() {
     </div>
     <aside class="ticket card" data-tut="caja-ticket">
       <div class="card-head"><h3>Venta actual</h3><span class="ticket-num mono">${store.numeroSiguiente()}</span></div>
-      ${lineas.length ? `<ul class="cart">${lineas.map(l => `<li>
+      ${lineas.length ? `<ul class="cart">${lineas.map(l => `<li class="${l.p.id === ui.recienAgregado ? 'nuevo' : ''}">
           <div class="li-main"><b>${imgProducto(l.p)} ${esc(l.p.nombre)}</b><small>${money(l.p.precioVenta)} / ${l.p.unidad} · IVA ${ivaDe(l.p)}%</small></div>
           <div class="qty"><button class="icon-btn sm" data-act="menos" data-id="${l.p.id}" aria-label="Quitar uno">${icon('minus')}</button><span class="num">${fmtCant(l.cantidad, l.p.unidad)}</span><button class="icon-btn sm" data-act="mas" data-id="${l.p.id}" aria-label="Agregar uno">${icon('plus')}</button></div>
           <b class="num">${money(l.cantidad * l.p.precioVenta)}</b>
@@ -1503,6 +1524,7 @@ function agregarAlCarrito(id) {
   const nueva = r3((it?.cantidad || 0) + (p.unidad === 'kg' ? 0.5 : 1));
   if (nueva > p.stock) return toast(`Solo quedan ${fmtCant(p.stock, p.unidad)} de ${p.nombre}.`, 'preocupado');
   if (it) it.cantidad = nueva; else ui.carrito.push({ productoId: id, cantidad: nueva });
+  ui.recienAgregado = id; // solo esa línea del carrito se anima
   render();
 }
 
@@ -1609,7 +1631,7 @@ window.addEventListener('appinstalled', () => { instalador = null; toast('Fresco
 
 
 // ---------- arranque ----------
-store.subscribe(() => { if (sesion) render(); });
+store.subscribe(() => { if (sesion) programarRender(); });
 const atajo = location.hash.slice(1);
 if (RUTAS.some(r => r.id === atajo)) ruta = atajo; // accesos directos del ícono instalado
 ubicarTomi(); // pantalla de carga mientras Firebase revisa la sesión

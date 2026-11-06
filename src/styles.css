@@ -162,6 +162,9 @@ button { cursor: pointer; }
   display: grid; gap: 18px; align-content: start;
   animation: view-in .32s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
+/* Redibujos de la misma pantalla (clics, ventas, avisos de Firebase): sin animaciones de entrada,
+   así la página no parece recargarse. Solo la línea recién agregada al carrito se anima. */
+#app.quieto .view, #app.quieto .greet, #app.quieto .kpi, #app.quieto .tile, #app.quieto .cart li:not(.nuevo) { animation: none; }
 @keyframes view-in {
   from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
