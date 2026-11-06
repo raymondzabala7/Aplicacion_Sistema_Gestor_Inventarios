@@ -135,6 +135,7 @@ function render() {
   ruta = r.id;
   app.innerHTML = shell(r, VISTAS[r.id]());
   ubicarTomi();
+  posicionarTutorial(); // la pantalla se redibujó: el resaltado sigue a su parte
 
   if (fid) {
     const el = document.getElementById(fid);
@@ -211,7 +212,7 @@ function shell(r, contenido) {
   <div class="layout">
     <aside class="side">
       <div class="brand"><div class="tomi-logo3d" data-tomi3d="logo" title="Tomi"></div><span>Fresco<b>Stock</b></span></div>
-      <nav class="nav">${grupos.map(g => `<div class="nav-group">${g ? `<span class="nav-title">${g}</span>` : ''}${rutas.filter(x => x.grupo === g).map(link).join('')}</div>`).join('')}</nav>
+      <nav class="nav" data-tut="menu">${grupos.map(g => `<div class="nav-group">${g ? `<span class="nav-title">${g}</span>` : ''}${rutas.filter(x => x.grupo === g).map(link).join('')}</div>`).join('')}</nav>
       <div class="side-foot">
         <div class="side-user"><span class="avatar">${esc(sesion.nombre[0])}</span><span><b>${esc(sesion.nombre)}</b><small>${ROL[sesion.rol]}</small></span></div>
         <span class="modo ${store.mode}">${store.mode === 'firebase' ? 'Conectado a Firebase' : 'Modo demo · datos en este navegador'}</span>
@@ -241,43 +242,42 @@ function shell(r, contenido) {
 }
 
 // ---------- tutorial "Aprende con Tomi" ----------
-// Muestra solo los pasos del rol que inició sesión (src/ui/tutorial.js), con texto y voz.
+// Recorrido guiado sobre la app real: en cada paso abre la pantalla, resalta la parte
+// que se explica (data-tut) y Tomi la cuenta con texto y voz. Solo los pasos del rol
+// que inició sesión (src/ui/tutorial.js).
 const TUT_VOZ = 'frescostock_tutorial_voz';
 const tutVisto = () => 'frescostock:tutorial-visto:' + sesion?.id;
 const vozTutorial = () => { try { return localStorage.getItem(TUT_VOZ) !== 'false'; } catch { return true; } };
-
-function dialogoTutorial() {
-  let d = $('#tutorial');
-  if (!d) {
-    d = document.createElement('dialog');
-    d.id = 'tutorial';
-    d.setAttribute('aria-label', 'Tutorial de FrescoStock');
-    // Al cerrar (botón o Esc) se calla la voz y se vacía, para que Tomi deje de dibujarse.
-    d.addEventListener('close', () => { callarVoz(); ui.tut = null; d.innerHTML = ''; });
-    document.body.append(d);
-  }
-  return d;
-}
 
 function abrirTutorial(i = 0) {
   if (!sesion) return;
   ui.tut = { pasos: pasosPara(sesion.rol), i };
   ui.menu = false;
   try { localStorage.setItem(tutVisto(), '1'); } catch {}
-  const d = dialogoTutorial();
+  if (!$('#tutorial')) {
+    // capa: bloquea clics en la app; luz: el recuadro que resalta; panel: la tarjeta de Tomi.
+    const t = document.createElement('div');
+    t.id = 'tutorial';
+    t.innerHTML = '<div class="tut-capa"></div><div class="tut-luz" hidden></div><div class="tut-panel" role="dialog" aria-label="Tutorial de FrescoStock"></div>';
+    document.body.append(t);
+  }
   pintarTutorial();
-  if (!d.open) d.showModal();
+}
+
+function cerrarTutorial() {
+  callarVoz();
+  ui.tut = null;
+  $('#tutorial')?.remove(); // al salir del documento, el Tomi del tutorial deja de dibujarse
 }
 
 function pintarTutorial() {
   const { pasos, i } = ui.tut;
   const p = pasos[i];
-  const destino = p.ruta && RUTAS.find(r => r.id === p.ruta);
+  if (p.ruta && ruta !== p.ruta) { ruta = p.ruta; render(); }
   const primero = i === 0;
   const ultimo = i === pasos.length - 1;
   const voz = vozTutorial();
-  $('#tutorial').innerHTML = `
-  <div class="tut">
+  $('#tutorial .tut-panel').innerHTML = `
     <div class="tut-tomi" data-tomi3d="tutorial" data-estado="${p.estado}"></div>
     <div class="tut-body">
       <div class="tut-top">
@@ -286,24 +286,51 @@ function pintarTutorial() {
         <button class="icon-btn" data-act="tut-cerrar" aria-label="Cerrar tutorial">${icon('x')}</button>
       </div>
       <div class="tut-card" aria-live="polite">
-        <span class="tut-ic">${icon(p.icono)}</span>
-        <h2>${esc(p.titulo)}</h2>
+        <h2><span class="tut-ic">${icon(p.icono)}</span>${esc(p.titulo)}</h2>
         <p>${esc(p.texto)}</p>
-        ${destino ? `<button class="link tut-ir" data-act="tut-ir">${icon(destino.icon)}Ir a ${esc(destino.label)}</button>` : ''}
       </div>
       <div class="tut-dots">${pasos.map((_, k) => `<button class="tut-dot ${k === i ? 'on' : ''}" data-act="tut-paso" data-i="${k}" aria-label="Ir al paso ${k + 1}"></button>`).join('')}</div>
       <div class="tut-foot">
-        <button class="btn ghost sm" data-act="tut-voz" aria-pressed="${voz}">${icon(voz ? 'volume' : 'mute')}<span>${voz ? 'Voz activada' : 'Voz apagada'}</span></button>
-        ${voz ? `<button class="btn ghost sm" data-act="tut-repetir">${icon('refresh')}<span>Repetir</span></button>` : ''}
+        <button class="btn ghost sm" data-act="tut-voz" aria-pressed="${voz}" title="${voz ? 'Apagar la voz de Tomi' : 'Encender la voz de Tomi'}">${icon(voz ? 'volume' : 'mute')}<span>${voz ? 'Voz' : 'Sin voz'}</span></button>
+        ${voz ? `<button class="btn ghost sm" data-act="tut-repetir" title="Repetir">${icon('refresh')}<span>Repetir</span></button>` : ''}
         <div class="tut-spacer"></div>
         ${primero ? '<button class="btn ghost" data-act="tut-cerrar">Ahora no</button>' : '<button class="btn ghost" data-act="tut-ant">Anterior</button>'}
         ${ultimo ? `<button class="btn primary" data-act="tut-cerrar">${icon('check')}Terminar</button>` : `<button class="btn primary" data-act="tut-sig">${primero ? 'Empezar' : 'Siguiente'}</button>`}
       </div>
-    </div>
-  </div>`;
+    </div>`;
   ubicarTomi();
+  posicionarTutorial(true);
+  setTimeout(() => posicionarTutorial(), 350); // por si las imágenes cambian el tamaño de la pantalla
   if (voz) leerEnVoz(textoParaVoz(p)); else callarVoz();
 }
+
+// Resalta la parte del paso actual y pone la tarjeta del lado contrario para no taparla.
+function posicionarTutorial(desplazar = false) {
+  const t = $('#tutorial');
+  if (!ui.tut || !t) return;
+  const p = ui.tut.pasos[ui.tut.i];
+  const luz = t.querySelector('.tut-luz');
+  const panel = t.querySelector('.tut-panel');
+  const el = p.foco && document.querySelector(p.foco);
+  const visible = el && el.getClientRects().length && el.getBoundingClientRect().width > 0;
+  t.classList.toggle('sin-foco', !visible);
+  panel.classList.remove('arriba', 'abajo', 'izq', 'der');
+  if (!visible) { luz.hidden = true; return; }
+  // Lo alto (como el catálogo de la caja) se muestra desde arriba; lo pequeño, centrado.
+  if (desplazar) el.scrollIntoView({ block: el.getBoundingClientRect().height > window.innerHeight * 0.6 ? 'start' : 'center', inline: 'nearest' });
+  const r = el.getBoundingClientRect();
+  const m = 8;
+  const top = Math.max(r.top - m, 4);
+  const bottom = Math.min(r.bottom + m, window.innerHeight - 4);
+  Object.assign(luz.style, { top: `${top}px`, left: `${Math.max(r.left - m, 4)}px`, width: `${Math.min(r.width + m * 2, window.innerWidth - 8)}px`, height: `${Math.max(bottom - top, 24)}px` });
+  luz.hidden = false;
+  panel.classList.add(r.top > window.innerHeight * 0.45 ? 'arriba' : 'abajo');
+  // En pantallas anchas, si lo resaltado está a un lado, la tarjeta va al otro.
+  const centroX = (r.left + r.right) / 2;
+  if (window.innerWidth > 1000 && r.width < window.innerWidth * 0.6) panel.classList.add(centroX > window.innerWidth / 2 ? 'izq' : 'der');
+}
+window.addEventListener('resize', () => posicionarTutorial());
+window.addEventListener('scroll', () => posicionarTutorial(), { passive: true });
 
 function irAPaso(i) {
   if (!ui.tut) return;
@@ -399,7 +426,7 @@ function vistaInicio() {
     </div>
   </div>
 
-  <div class="kpis">
+  <div class="kpis" data-tut="kpis">
     <div class="kpi"><span class="kpi-ic ok">${icon('coin')}</span><span>Ventas de hoy</span><b>${money(ventasHoy)}</b><small>${hoy.length} facturas</small></div>
     <div class="kpi"><span class="kpi-ic accent">${icon('receipt')}</span><span>Ticket promedio</span><b>${money(hoy.length ? ventasHoy / hoy.length : 0)}</b><small>por factura hoy</small></div>
     <div class="kpi"><span class="kpi-ic info">${icon('truck')}</span><span>Recibido en 7 días</span><b>${Math.round(sum(entregas7, e => e.totalUnidades)).toLocaleString('es-CO')} <i>und</i></b><small>${entregas7.length} entregas · ${money(sum(entregas7, e => e.totalCosto))}</small></div>
@@ -462,7 +489,7 @@ function vistaProductos() {
     ${puede('admin') ? `<button class="btn soft" data-act="categorias">Categorías</button><button class="btn primary" data-act="prod-nuevo">${icon('plus')}Producto</button>` : ''}
   </div>
   ${chipsCategorias(ui.prodCat, 'prod-cat', contar)}
-  <div class="card flush">
+  <div class="card flush" data-tut="productos">
     <div class="table-wrap"><table class="table">
       <thead><tr><th>Producto</th><th>Categoría</th><th class="r">Precio (IVA incl.)</th><th class="r">IVA</th><th>Stock</th><th>Estado</th><th class="r">Acciones</th></tr></thead>
       <tbody>${lista.map(p => `<tr>
@@ -493,7 +520,7 @@ function vistaCaja() {
   const hoy = s.facturas.filter(f => f.fecha >= hoy0);
   return `
   <div class="pos">
-    <div class="pos-catalog">
+    <div class="pos-catalog" data-tut="caja-catalogo">
       <div class="search-row">
         <label class="search">${icon('search')}<input id="cajaQ" data-bind="cajaQ" value="${esc(ui.cajaQ)}" placeholder="Buscar o escanear código y Enter (F2)" aria-label="Buscar producto para vender"></label>
         <button class="btn soft" data-act="camara" title="Escanear con cámara del celular o laptop">${icon('camera')}<span>Cámara</span></button>
@@ -508,7 +535,7 @@ function vistaCaja() {
           <small class="${p.stock <= p.stockMinimo ? 'warn-t' : 'muted'}">${p.stock <= 0 ? 'Agotado' : 'Quedan ' + fmtCant(p.stock, p.unidad)}</small>
         </button>`).join('') || `<div class="empty">${tomi('preocupado', 'tomi-empty')}<p>Sin resultados.</p></div>`}</div>
     </div>
-    <aside class="ticket card">
+    <aside class="ticket card" data-tut="caja-ticket">
       <div class="card-head"><h3>Venta actual</h3><span class="ticket-num mono">${store.numeroSiguiente()}</span></div>
       ${lineas.length ? `<ul class="cart">${lineas.map(l => `<li>
           <div class="li-main"><b>${imgProducto(l.p)} ${esc(l.p.nombre)}</b><small>${money(l.p.precioVenta)} / ${l.p.unidad} · IVA ${ivaDe(l.p)}%</small></div>
@@ -524,11 +551,11 @@ function vistaCaja() {
       <div class="total"><span>Total a pagar <small>IVA incluido</small></span><b class="num">${money(total)}</b></div>
       <div class="row">
         <button class="btn ghost" data-act="vaciar" ${lineas.length ? '' : 'disabled'}>Vaciar</button>
-        <button class="btn accent grow lg" data-act="cobrar" ${lineas.length ? '' : 'disabled'}>${icon('receipt')}Cobrar y facturar <small class="kbd" style="font-size:.7rem;margin-left:4px;opacity:.8">(F4)</small></button>
+        <button class="btn accent grow lg" data-tut="caja-cobrar" data-act="cobrar" ${lineas.length ? '' : 'disabled'}>${icon('receipt')}Cobrar y facturar <small class="kbd" style="font-size:.7rem;margin-left:4px;opacity:.8">(F4)</small></button>
       </div>
     </aside>
   </div>
-  <section class="card">
+  <section class="card" data-tut="caja-facturas">
     <div class="card-head">
       <div><h3>Facturas de hoy</h3><span class="muted">${hoy.filter(f => f.estado === 'pagada').length} pagadas · ${money(sum(hoy.filter(f => f.estado === 'pagada'), f => f.total))}</span></div>
       ${hoy.length ? `<button class="btn soft sm" data-act="exportar-ventas" title="Descargar facturas de hoy en CSV">${icon('download')}<span>Exportar ventas</span></button>` : ''}
@@ -565,7 +592,7 @@ function vistaRecepcion() {
 
   return `
   <div class="grid-recep">
-    <section class="card">
+    <section class="card" data-tut="recepcion">
       <div class="card-head"><h3>Nueva entrega</h3><span class="muted">${new Date().toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })}</span></div>
       <label class="field"><span>Proveedor</span>
         <select id="rec-prov" data-recprov>
@@ -615,7 +642,7 @@ function vistaProveedores() {
   return `
   <div class="toolbar"><span class="muted">${s.proveedores.length} proveedores</span>
     ${puede('admin') ? `<button class="btn primary" data-act="prov-nuevo">${icon('plus')}Proveedor</button>` : ''}</div>
-  <div class="cards">${s.proveedores.map(p => {
+  <div class="cards" data-tut="proveedores">${s.proveedores.map(p => {
     const es = s.entregas.filter(e => e.proveedorId === p.id);
     return `<article class="card prov">
       <div class="prov-head"><span class="avatar lg">${esc(p.nombre[0])}</span><div><h3>${esc(p.nombre)}</h3><small class="mono muted">NIT ${esc(p.nit)}</small></div></div>
@@ -647,7 +674,7 @@ function vistaAlertas() {
     <div><h2>${activas.length ? `${activas.length} alerta${activas.length > 1 ? 's' : ''} por atender` : '¡Sin alertas pendientes!'}</h2>
     <p>${activas.length ? 'Se crean solas cuando un producto queda en su stock mínimo o se agota, y se cierran solas cuando entra mercancía.' : 'El inventario está sano. Tomi está feliz.'}</p></div>
   </div>
-  <div class="grid-2">
+  <div class="grid-2" data-tut="alertas">
     <section class="card">
       <div class="card-head"><h3>Stock bajo y agotados</h3></div>
       <ul class="list">${activas.map(a => `<li class="alert-li ${a.tipo}">
@@ -682,7 +709,7 @@ function vistaHistorial() {
   const historialFiltrado = s.historial.filter(h => dentroRango(h.fecha)).slice(0, 150);
   const movs = s.movimientos.filter(m => dentroRango(m.fecha) && (ui.histTipo === 'todos' || m.tipo === ui.histTipo)).slice(0, 150);
   return `
-  <div class="toolbar" style="margin-bottom: 8px;">
+  <div class="toolbar" data-tut="historial" style="margin-bottom: 8px;">
     <div class="chips" style="margin: 0;">
       <button class="chip ${ui.histTab === 'actividad' ? 'on' : ''}" data-act="hist-tab" data-tab="actividad">Actividad del equipo</button>
       <button class="chip ${ui.histTab === 'movimientos' ? 'on' : ''}" data-act="hist-tab" data-tab="movimientos">Movimientos de stock</button>
@@ -714,7 +741,7 @@ function vistaUsuarios() {
   return `
   <div class="toolbar"><span class="muted">${s.usuarios.filter(u => u.activo).length} activos de ${s.usuarios.length}</span>
     <button class="btn primary" data-act="user-nuevo">${icon('plus')}Empleado</button></div>
-  <section class="card flush"><div class="table-wrap"><table class="table">
+  <section class="card flush" data-tut="usuarios"><div class="table-wrap"><table class="table">
     <thead><tr><th>Empleado</th><th>Correo</th><th>Rol</th><th>Turno</th><th>Estado</th><th class="r">Acciones</th></tr></thead>
     <tbody>${s.usuarios.map(u => `<tr>
       <td><div class="who"><span class="avatar">${esc(u.nombre[0])}</span><div><b>${esc(u.nombre)}</b><small class="block muted">CC ${esc(u.cedula || '—')}</small></div></div></td>
@@ -1304,14 +1331,7 @@ const ACCIONES = {
     try { localStorage.setItem(TUT_VOZ, vozTutorial() ? 'false' : 'true'); } catch {}
     pintarTutorial();
   },
-  'tut-cerrar': () => $('#tutorial').close(),
-  'tut-ir': () => {
-    const destino = ui.tut.pasos[ui.tut.i].ruta;
-    $('#tutorial').close();
-    ruta = destino;
-    render();
-    window.scrollTo({ top: 0 });
-  },
+  'tut-cerrar': () => cerrarTutorial(),
   'toggle-sonido': () => {
     const activo = alternarSonido();
     toast(activo ? 'Sonidos de Tomi activados 🔊' : 'Sonidos de Tomi silenciados 🔇', 'feliz');
@@ -1329,7 +1349,7 @@ const ACCIONES = {
       toast(e.message, 'preocupado');
     }
   },
-  'salir': async () => { await store.logout(); sesion = null; ui.menu = false; ui.carrito = []; render(); },
+  'salir': async () => { cerrarTutorial(); await store.logout(); sesion = null; ui.menu = false; ui.carrito = []; render(); },
   'instalar': async () => { if (!instalador) return; instalador.prompt(); await instalador.userChoice; instalador = null; render(); },
   'reset': () => { ui.menu = false; render(); confirmar('Reiniciar demo', 'Se borran tus cambios y vuelven los datos de ejemplo.', 'Reiniciar', async () => { await store.reset(); ui.carrito = []; ui.recep = { proveedorId: '', items: [filaVacia()] }; toast('Datos de la demo reiniciados.'); }); },  'modal-cerrar': () => $('#modal').close(),
   'imprimir': () => window.print(),
@@ -1457,9 +1477,10 @@ document.addEventListener('change', e => {
 // Escáner de código de barras y atajos de teclado rápidos para la caja
 document.addEventListener('keydown', e => {
   // Con el tutorial abierto, las flechas pasan de paso y los atajos de caja no actúan.
-  if ($('#tutorial')?.open) {
+  if (ui.tut) {
     if (e.key === 'ArrowRight') irAPaso(ui.tut.i + 1);
     if (e.key === 'ArrowLeft') irAPaso(ui.tut.i - 1);
+    if (e.key === 'Escape') cerrarTutorial();
     return;
   }
   // F2: Enfocar barra de búsqueda / lector en caja
