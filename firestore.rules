@@ -15,7 +15,9 @@ service cloud.firestore {
     match /productos/{id} {
       allow read: if activo();
       allow create, delete: if rol(['admin']);
-      allow update: if rol(['admin']) || (rol(['cajero', 'bodega']) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stock', 'costo']));
+      allow update: if rol(['admin'])
+        || (rol(['cajero']) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stock']))
+        || (rol(['bodega']) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stock', 'costo']));
     }
     match /facturas/{id} {
       allow read: if activo();

@@ -1,17 +1,26 @@
 import * as THREE from 'three';
+import { sonidoPop, sonidoCosquillas, sonidoEnojo, sonidoCalma } from './tomi-audio.js';
 
 // Tomi en 3D (diseño del equipo). Cada instancia es una escena cuyo lienzo se mueve
 // entre pantallas, porque la app redibuja el HTML seguido: 'logo' vive en la barra
 // lateral y 'vista' pasa por la carga, el login, el inicio, la caja y las alertas.
 
+const FRASES_ALEGRES = [
+  '¡Hola! 🍅✨ ¡Qué alegría verte!',
+  '¡Me haces cosquillas! 😄',
+  '¡El inventario está en las mejores manos!',
+  '¡Soy Tomi, tu tomate favorito! 🍅❤️',
+  '¡Fresco, crujiente y organizado!',
+  '¡Vamos a tener una jornada súper productiva! 🚀',
+];
 const FRASES_ENOJO = [
   '¡Ey! ¡Eso duele!',
-  '¡No me aprietes, que me hago puré!',
-  '¡Grrr! Cuidado con ese clic.',
+  '¡No me aprietes tan rápido, que me hago puré!',
+  '¡Grrr! Cuidado con ese dedo.',
   '¡Me vas a convertir en salsa!',
   '¡Ya basta! Estoy más rojo que de costumbre.',
 ];
-const FRASES_CALMA = ['Bueno… te perdono 🍅', 'Uf, ya pasó. ¿Seguimos?', 'Está bien, pero con cariño la próxima vez.'];
+const FRASES_CALMA = ['Bueno… te perdono 🍅', 'Uf, ya pasó. ¿Seguimos?', 'Está bien, ¡pero con cariño! ❤️'];
 const HABLA_CADA_MS = 7000;
 const ENOJO_MS = 2400;
 const elegir = a => a[Math.floor(Math.random() * a.length)];
@@ -34,7 +43,7 @@ function crear() {
   canvas.setAttribute('aria-label', 'Tomi, la mascota de FrescoStock');
   el.append(canvas, globo);
 
-  const BASE = { frases: [], globo: true, alHablar: null, estado: 'feliz' };
+  const BASE = { frases: [], globo: false, alHablar: null, estado: 'feliz' };
   let opciones = { ...BASE };
 
   // ---------- Escena ----------
@@ -50,8 +59,8 @@ function crear() {
   const R = 1.5, CY = 0.2, SY = 0.95;
   const surf = (x, y) => Math.sqrt(Math.max(0.01, R * R - x * x - Math.pow((y - CY) / SY, 2)));
 
-  const matBody = new THREE.MeshPhysicalMaterial({ color: 0xe0301c, roughness: 0.38, clearcoat: 0.7, clearcoatRoughness: 0.25, emissive: 0x000000 });
-  const matGreen = new THREE.MeshStandardMaterial({ color: 0x4fa23a, roughness: 0.6 });
+  const matBody = new THREE.MeshPhysicalMaterial({ color: 0xe22c17, roughness: 0.28, clearcoat: 0.85, clearcoatRoughness: 0.18, emissive: 0x000000 });
+  const matGreen = new THREE.MeshStandardMaterial({ color: 0x4fa23a, roughness: 0.55 });
   const matStem = new THREE.MeshStandardMaterial({ color: 0x7a5a2e, roughness: 0.8 });
   const matDark = new THREE.MeshStandardMaterial({ color: 0x1c0d0a, roughness: 0.25 });
   const matWhite = new THREE.MeshBasicMaterial({ color: 0xffffff });
@@ -98,8 +107,9 @@ function crear() {
   const eyes = [-0.5, 0.5].map(x => {
     const g = new THREE.Group();
     const ball = new THREE.Mesh(new THREE.SphereGeometry(0.27, 32, 24), matDark); ball.scale.z = 0.55; g.add(ball);
-    const h1 = new THREE.Mesh(new THREE.SphereGeometry(0.075, 12, 10), matWhite); h1.position.set(0.09, 0.09, 0.14); g.add(h1);
-    const h2 = new THREE.Mesh(new THREE.SphereGeometry(0.03, 10, 8), matWhite); h2.position.set(-0.08, -0.09, 0.14); g.add(h2);
+    const h1 = new THREE.Mesh(new THREE.SphereGeometry(0.085, 14, 12), matWhite); h1.position.set(0.09, 0.09, 0.14); g.add(h1);
+    const h2 = new THREE.Mesh(new THREE.SphereGeometry(0.038, 10, 8), matWhite); h2.position.set(-0.08, -0.09, 0.14); g.add(h2);
+    const h3 = new THREE.Mesh(new THREE.SphereGeometry(0.024, 8, 8), matWhite); h3.position.set(0.03, -0.08, 0.14); g.add(h3);
     return place(g, x, 0.35, -0.02);
   });
 
@@ -136,10 +146,10 @@ function crear() {
     if (!w || !h) return;
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
-    // Con globo se deja espacio arriba para el texto; sin globo Tomi ocupa todo el alto.
-    const espacio = opciones.globo ? 8.5 : 6.6;
-    camera.position.set(0, 0.5, espacio * Math.max(1, 0.7 / camera.aspect));
-    camera.lookAt(0, opciones.globo ? 0.3 : -0.05, 0);
+    // Con globo se deja espacio holgado arriba para el texto; sin globo Tomi ocupa todo el alto.
+    const espacio = opciones.globo ? 8.8 : 6.6;
+    camera.position.set(0, opciones.globo ? 0.35 : 0.5, espacio * Math.max(1, 0.7 / camera.aspect));
+    camera.lookAt(0, opciones.globo ? 0.45 : -0.05, 0);
     camera.updateProjectionMatrix();
   }
   new ResizeObserver(resize).observe(el);
@@ -157,36 +167,64 @@ function crear() {
     ray.setFromCamera(ndc, camera);
     return ray.intersectObject(tomi, true).length > 0;
   }
+  let clicsRapidos = 0, ultimoClic = 0;
   canvas.addEventListener('pointermove', e => { canvas.style.cursor = tocaTomi(e) ? 'pointer' : 'default'; });
   canvas.addEventListener('pointerdown', e => {
     mouse.x = (e.clientX / window.innerWidth) * 2 - 1; mouse.y = (e.clientY / window.innerHeight) * 2 - 1;
-    if (tocaTomi(e)) enojarse();
+    if (tocaTomi(e)) {
+      const ahora = performance.now();
+      if (ahora - ultimoClic < 1500) {
+        clicsRapidos++;
+      } else {
+        clicsRapidos = 1;
+      }
+      ultimoClic = ahora;
+
+      if (clicsRapidos >= 3) {
+        enojarse();
+      } else {
+        alegrarse();
+      }
+    }
   });
 
   // ---------- Habla ----------
   let ocultarT = null, enojoT = null, ultimaVez = 0;
-  function decir(texto, ms = 4200, enojado = false) {
+  function decir(texto, ms = 4200, enojado = false, conSonido = true) {
     ultimaVez = performance.now();
-    if (!opciones.globo) { opciones.alHablar?.(texto, enojado); return; }
+    if (!enojado && conSonido) sonidoPop();
+    if (!opciones.globo) {
+      globo.classList.remove('show');
+      opciones.alHablar?.(texto, enojado);
+      return;
+    }
     globo.textContent = texto;
     globo.className = 'tomi3d-globo show' + (enojado ? ' enojado' : '');
     clearTimeout(ocultarT);
     ocultarT = setTimeout(() => globo.classList.remove('show'), ms);
   }
   let enojado = false, objetivo = 0;
+  function alegrarse() {
+    saludoDesde = clock.getElapsedTime();
+    sonidoCosquillas();
+    const repertorio = opciones.frases?.length
+      ? [...opciones.frases, ...FRASES_ALEGRES]
+      : FRASES_ALEGRES;
+    decir(elegir(repertorio), 3500, false, false);
+  }
   function enojarse() {
     enojado = true; objetivo = 1;
-    decir(elegir(FRASES_ENOJO), ENOJO_MS + 300, true);
+    sonidoEnojo();
+    decir(elegir(FRASES_ENOJO), ENOJO_MS + 300, true, false);
     clearTimeout(enojoT);
     enojoT = setTimeout(() => {
       enojado = false; objetivo = 0;
-      decir(elegir(FRASES_CALMA), 3000, false);
+      sonidoCalma();
+      decir(elegir(FRASES_CALMA), 3000, false, false);
     }, ENOJO_MS);
   }
-  setInterval(() => {
-    if (!el.isConnected || enojado || !opciones.globo || !opciones.frases.length) return;
-    if (performance.now() - ultimaVez > HABLA_CADA_MS - 500) decir(elegir(opciones.frases));
-  }, HABLA_CADA_MS);
+  // Los mensajes NO se repiten automáticamente en bucle continuo para evitar sonidos consecutivos tediosos.
+  // Tomi habla cuando el usuario entra (saludo personalizado) o al interactuar/hacer clic sobre él.
 
   // ---------- Animación ----------
   // anger: clic; worry y party vienen del estado ('preocupado' o 'celebrando').
@@ -256,15 +294,20 @@ function crear() {
     const lado = anger >= worry ? 1 : -0.7;
     brows.forEach((b, i) => { b.scale.set(bs, bs, bs); b.rotation.z = (i ? 0.5 : -0.5) * lado; });
 
-    // Globo sobre la cabeza
+    // Globo sobre la cabeza (ubicado siempre arriba de la coronita para no tapar a Tomi)
     if (opciones.globo) {
-      v.set(0, 2.9, 0); tomi.localToWorld(v); v.project(camera);
+      v.set(0, 2.22, 0); tomi.localToWorld(v); v.project(camera);
       let px = (v.x * 0.5 + 0.5) * el.clientWidth;
       const py = (-v.y * 0.5 + 0.5) * el.clientHeight;
-      const half = globo.offsetWidth / 2 + 8;
-      px = Math.min(Math.max(px, half), el.clientWidth - half);
+      const half = globo.offsetWidth / 2;
+      if (el.clientWidth > globo.offsetWidth + 20) {
+        px = Math.min(Math.max(px, half + 10), el.clientWidth - half - 10);
+      }
       globo.style.left = px + 'px';
-      globo.style.top = Math.max(py, globo.offsetHeight + 12) + 'px';
+      // Con transform: translate(-50%, -100%), la base del globo queda en top.
+      // py - 12 sitúa la flechita 12px arriba de la coronita de Tomi.
+      // El cuerpo del globo crece hacia ARRIBA, evitando por completo tapar la carita y cuerpo.
+      globo.style.top = (py - 12) + 'px';
     }
 
     renderer.render(scene, camera);
@@ -288,7 +331,7 @@ function crear() {
       resize();
       if (cambio && opciones.globo && opciones.frases.length) {
         globo.classList.remove('show');
-        setTimeout(() => { if (!enojado) decir(opciones.frases[0], 4500); }, 600);
+        setTimeout(() => { if (!enojado) decir(opciones.frases[0], 5000, false, false); }, 500);
       }
     },
     decir: (texto, ms) => decir(texto, ms, false),

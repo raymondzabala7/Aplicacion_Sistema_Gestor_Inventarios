@@ -1,7 +1,8 @@
 import { createStore } from './data/store.js';
-import { fmtCant, r3 } from './domain/inventory.js';
+import { descargarCSV, fmtCant, r3 } from './domain/inventory.js';
 import { tomi } from './ui/tomi.js';
 import { tomi3D } from './ui/tomi3d.js';
+import { saludarAlEntrar, alternarSonido, sonidoHabilitado } from './ui/tomi-audio.js';
 
 const store = createStore();
 
@@ -37,6 +38,12 @@ const ICON = {
   receipt: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/>',
   calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
   check: '<path d="M5 12l5 5 9-10"/>', print: '<path d="M7 9V3h10v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M7 14h10v7H7z"/>', refresh: '<path d="M20 12a8 8 0 11-3-6.3"/><path d="M20 4v5h-5"/>',
+  camera: '<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',
+  qr: '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="6" y="6" width="1" height="1"/><rect x="17" y="6" width="1" height="1"/><rect x="17" y="17" width="1" height="1"/><rect x="6" y="17" width="1" height="1"/>',
+  creditCard: '<rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>',
+  fileText: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>',
+  volume: '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>',
+  mute: '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/>',
 };
 const icon = (n, c = '') => `<svg class="ic ${c}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n]}</svg>`;
 
@@ -60,7 +67,7 @@ let instalador = null;
 const filaVacia = () => ({ productoId: '', cantidad: '', costoUnit: '', lote: '', vence: '' });
 const ui = {
   prodCat: 'todas', prodQ: '', cajaCat: 'todas', cajaQ: '', carrito: [],
-  recep: { proveedorId: '', items: [filaVacia()] }, histTab: 'actividad', histTipo: 'todos', menu: false,
+  recep: { proveedorId: '', items: [filaVacia()] }, histTab: 'actividad', histTipo: 'todos', histRango: 'todos', menu: false,
 };
 const puede = (...roles) => roles.includes(sesion?.rol);
 
@@ -88,31 +95,57 @@ function render() {
 // Tomi 3D: después de cada render cada lienzo se mueve al lugar marcado con data-tomi3d
 // (data-estado: feliz, preocupado o celebrando). El del logo es otra instancia.
 const FRASES = {
-  carga: ['Cargando el inventario…', 'Contando tomates… 🍅', 'Un momento, reviso los estantes.'],
+  carga: ['Cargando el inventario… 🍅', 'Contando tomates…', 'Un momento, reviso los estantes.'],
   login: [
-    '¡Hola! Soy Tomi 🍅 Entra y revisamos juntos el inventario.',
+    '¡Hola! Soy Tomi 🍅 Tu compañero de inventario.',
     'Cada venta descuenta el stock solita.',
     'Si un producto se agota, yo te aviso.',
     '¿Llegó el proveedor? Lo registramos en Recepción.',
     'Psst… no compartas tu contraseña 🔐',
-    'Un tomate olvidado en bodega es un tomate triste.',
+    '¡Los tomates frescos hacen clientes felices! ✨',
   ],
   caja: [
     '¡Listo para vender! 🛒',
-    'Escanea el código y presiona Enter.',
-    'Los productos por kilo suben de 0,5 en 0,5.',
-    'Toca un producto para agregarlo.',
+    'Presiona F2 para enfocar el buscador.',
+    'Presiona F4 para cobrar rápido.',
+    'Puedes escanear códigos con la cámara o pistola USB.',
+    'Calculo la devuelta en efectivo automáticamente.',
+  ],
+  inicio: [
+    '¡Hola! Qué gusto verte hoy.',
+    'Aquí tienes los indicadores clave del día.',
+    'Cualquier duda, ¡hazme clic! 🍅',
+  ],
+  alertas: [
+    '¡Revisemos qué productos necesitan reposición!',
+    'Un producto agotado es una venta perdida.',
+    'Puedes dar de baja los lotes vencidos directamente.',
   ],
 };
+
+function obtenerFrases(lugar) {
+  if (lugar === 'inicio') {
+    const nombre = sesion?.nombre ? sesion.nombre.trim().split(/\s+/)[0] : '';
+    const saludo = nombre ? `¡Hola, ${nombre}! 🍅✨` : '¡Hola! 🍅✨ ¡Qué alegría verte!';
+    return [
+      saludo,
+      'Aquí tienes los indicadores clave del día.',
+      'Cualquier duda, ¡hazme clic! 🍅',
+      '¡El inventario está en las mejores manos!',
+    ];
+  }
+  return FRASES[lugar] || [];
+}
+
 function ubicarTomi() {
-  // Donde no hay espacio para el globo, sus reacciones salen como aviso.
+  // Todos los mensajes y reacciones de Tomi salen como notificación (toast) para no tapar la pantalla.
   const reaccion = (texto, enojado) => toast(texto, enojado ? 'preocupado' : 'feliz');
   document.querySelectorAll('[data-tomi3d]').forEach(slot => {
     const lugar = slot.dataset.tomi3d;
     const estado = slot.dataset.estado || 'feliz';
+    const frasesLugar = obtenerFrases(lugar);
     if (lugar === 'logo') tomi3D('logo').colocar(slot, { globo: false, estado, alHablar: reaccion });
-    else if (FRASES[lugar]) tomi3D().colocar(slot, { frases: FRASES[lugar], estado });
-    else tomi3D().colocar(slot, { globo: false, estado, alHablar: reaccion });
+    else tomi3D().colocar(slot, { globo: false, frases: frasesLugar, estado, alHablar: reaccion });
   });
 }
 
@@ -139,6 +172,7 @@ function shell(r, contenido) {
         <div class="top-actions">
           <span class="today">${icon('calendar')}${hoy}</span>
           ${instalador ? `<button class="btn soft sm" data-act="instalar">${icon('download')}<span>Instalar app</span></button>` : ''}
+          <button class="icon-btn" data-act="toggle-sonido" title="${sonidoHabilitado() ? 'Silenciar sonidos de Tomi' : 'Activar sonidos de Tomi'}" aria-label="Sonido">${icon(sonidoHabilitado() ? 'volume' : 'mute')}</button>
           <button class="icon-btn bell" data-act="ir" data-ruta="alertas" aria-label="Alertas: ${nAlertas}">${icon('bell')}${nAlertas ? `<em>${nAlertas}</em>` : ''}</button>
           <div class="me">
             <button class="me-btn" data-act="menu" aria-expanded="${ui.menu}"><span class="avatar">${esc(sesion.nombre[0])}</span><span class="me-txt"><b>${esc(sesion.nombre)}</b><small>${ROL[sesion.rol]}</small></span></button>
@@ -295,6 +329,7 @@ function vistaProductos() {
   return `
   <div class="toolbar">
     <label class="search">${icon('search')}<input id="prodQ" data-bind="prodQ" value="${esc(ui.prodQ)}" placeholder="Buscar por nombre o código de barras" aria-label="Buscar productos"></label>
+    <button class="btn soft" data-act="exportar-productos" title="Descargar inventario en tabla de Excel (.xlsx)">${icon('download')}<span>Exportar Excel</span></button>
     ${puede('admin') ? `<button class="btn soft" data-act="categorias">Categorías</button><button class="btn primary" data-act="prod-nuevo">${icon('plus')}Producto</button>` : ''}
   </div>
   ${chipsCategorias(ui.prodCat, 'prod-cat', contar)}
@@ -328,7 +363,11 @@ function vistaCaja() {
   return `
   <div class="pos">
     <div class="pos-catalog">
-      <label class="search">${icon('search')}<input id="cajaQ" data-bind="cajaQ" value="${esc(ui.cajaQ)}" placeholder="Buscar o escanear código y Enter" aria-label="Buscar producto para vender"></label>
+      <div class="search-row">
+        <label class="search">${icon('search')}<input id="cajaQ" data-bind="cajaQ" value="${esc(ui.cajaQ)}" placeholder="Buscar o escanear código y Enter (F2)" aria-label="Buscar producto para vender"></label>
+        <button class="btn soft" data-act="camara" title="Escanear con cámara del celular o laptop">${icon('camera')}<span>Cámara</span></button>
+      </div>
+      <div class="kbd-hint">Atajos: <kbd>F2</kbd> Buscar · <kbd>F4</kbd> Cobrar · <kbd>Esc</kbd> Vaciar</div>
       ${chipsCategorias(ui.cajaCat, 'caja-cat', contar)}
       <div class="tiles">${lista.map(p => `<button class="tile ${p.stock <= 0 ? 'off' : p.stock <= p.stockMinimo ? 'low' : ''}" data-act="agregar" data-id="${p.id}" ${p.stock <= 0 ? 'disabled' : ''}>
           <span class="tile-emoji">${categoria(p.categoriaId)?.icono ?? '🛒'}</span>
@@ -349,20 +388,26 @@ function vistaCaja() {
       <div class="total"><span>Total <small>IVA incluido</small></span><b class="num">${money(total)}</b></div>
       <div class="row">
         <button class="btn ghost" data-act="vaciar" ${lineas.length ? '' : 'disabled'}>Vaciar</button>
-        <button class="btn accent grow lg" data-act="cobrar" ${lineas.length ? '' : 'disabled'}>${icon('receipt')}Cobrar y facturar</button>
+        <button class="btn accent grow lg" data-act="cobrar" ${lineas.length ? '' : 'disabled'}>${icon('receipt')}Cobrar y facturar <small class="kbd" style="font-size:.7rem;margin-left:4px;opacity:.8">(F4)</small></button>
       </div>
     </aside>
   </div>
   <section class="card">
-    <div class="card-head"><h3>Facturas de hoy</h3><span class="muted">${hoy.filter(f => f.estado === 'pagada').length} pagadas · ${money(sum(hoy.filter(f => f.estado === 'pagada'), f => f.total))}</span></div>
+    <div class="card-head">
+      <div><h3>Facturas de hoy</h3><span class="muted">${hoy.filter(f => f.estado === 'pagada').length} pagadas · ${money(sum(hoy.filter(f => f.estado === 'pagada'), f => f.total))}</span></div>
+      ${hoy.length ? `<button class="btn soft sm" data-act="exportar-ventas" title="Descargar facturas de hoy en CSV">${icon('download')}<span>Exportar ventas</span></button>` : ''}
+    </div>
     <div class="table-wrap"><table class="table">
-      <thead><tr><th>Factura</th><th>Hora</th><th>Cajero</th><th class="r">Productos</th><th class="r">Total</th><th>Estado</th><th class="r"></th></tr></thead>
+      <thead><tr><th>Factura</th><th>Hora</th><th>Cajero</th><th>Cliente</th><th class="r">Productos</th><th class="r">Total</th><th>Método</th><th>Estado</th><th class="r"></th></tr></thead>
       <tbody>${hoy.map(f => `<tr>
-        <td class="mono">${f.numero}</td><td>${hora(f.fecha)}</td><td>${esc(f.cajeroNombre)}</td><td class="r">${f.items.length}</td>
+        <td class="mono">${f.numero}</td><td>${hora(f.fecha)}</td><td>${esc(f.cajeroNombre)}</td>
+        <td><small>${esc(f.cliente?.nombre || 'Consumidor Final')}</small></td>
+        <td class="r">${f.items.length}</td>
         <td class="r num"><b>${money(f.total)}</b></td>
+        <td><small class="pill info">${esc(f.metodoPago === 'tarjeta' ? 'Tarjeta' : f.metodoPago === 'transferencia' ? 'QR/Transf' : 'Efectivo')}</small></td>
         <td>${f.estado === 'anulada' ? '<span class="pill bad">Anulada</span>' : '<span class="pill ok">Pagada</span>'}</td>
         <td class="r actions"><button class="btn soft sm" data-act="factura-ver" data-id="${f.id}">Ver</button>
-          ${puede('admin') && f.estado === 'pagada' ? `<button class="btn ghost sm" data-act="factura-anular" data-id="${f.id}">Anular</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">Aún no hay facturas hoy.</td></tr>'}</tbody>
+          ${puede('admin') && f.estado === 'pagada' ? `<button class="btn ghost sm" data-act="factura-anular" data-id="${f.id}">Anular</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="9" class="muted">Aún no hay facturas hoy.</td></tr>'}</tbody>
     </table></div>
   </section>`;
 }
@@ -479,7 +524,9 @@ function vistaAlertas() {
       <div class="card-head"><h3>Por vencer en 7 días</h3><span class="muted">según lotes recibidos</span></div>
       <ul class="list">${vencen.map(v => { const d = diasPara(v.vence); return `<li>
         <div class="li-main"><b>${esc(v.nombre)}</b><small>Lote ${esc(v.lote || '—')} · ${esc(v.proveedor)} · ${fmtCant(v.cantidad, v.unidad)}</small></div>
-        <span class="pill ${d <= 2 ? 'bad' : 'warn'}">${d === 0 ? 'Vence hoy' : d === 1 ? 'Vence mañana' : `En ${d} días`}</span></li>`; }).join('') || '<li class="muted">Ningún lote vence esta semana.</li>'}</ul>
+        <span class="pill ${d <= 2 ? 'bad' : 'warn'}">${d === 0 ? 'Vence hoy' : d === 1 ? 'Vence mañana' : `En ${d} días`}</span>
+        ${puede('admin', 'bodega') ? `<button class="btn ghost sm danger" data-act="baja-vencimiento" data-id="${v.productoId}" data-cant="${v.cantidad}" data-lote="${esc(v.lote || '')}">Dar de baja</button>` : ''}
+        </li>`; }).join('') || '<li class="muted">Ningún lote vence esta semana.</li>'}</ul>
       <div class="card-head sub"><h3>Atendidas recientemente</h3></div>
       <ul class="list dim">${atendidas.map(a => `<li><div class="li-main"><b>${esc(a.productoNombre)}</b><small>${a.resuelta === 'auto' ? 'Se cerró sola al entrar mercancía' : 'Atendida por ' + esc(a.atendidaPor ?? '—')} · ${a.fechaAtendida ? fechaHora(a.fechaAtendida) : ''}</small></div><span class="pill ok">Resuelta</span></li>`).join('') || '<li class="muted">Ninguna todavía.</li>'}</ul>
     </section>
@@ -488,17 +535,31 @@ function vistaAlertas() {
 
 function vistaHistorial() {
   const s = S();
+  const hoy0 = inicioDia();
+  const dentroRango = fecha => {
+    if (ui.histRango === 'hoy') return fecha >= hoy0;
+    if (ui.histRango === '7d') return fecha >= hoy0 - 6 * DIA;
+    if (ui.histRango === '30d') return fecha >= hoy0 - 29 * DIA;
+    return true;
+  };
   const tipos = { entrada: ['Entrada', 'ok'], salida: ['Salida', 'info'], ajuste: ['Ajuste', 'warn'] };
-  const movs = s.movimientos.filter(m => ui.histTipo === 'todos' || m.tipo === ui.histTipo).slice(0, 150);
+  const historialFiltrado = s.historial.filter(h => dentroRango(h.fecha)).slice(0, 150);
+  const movs = s.movimientos.filter(m => dentroRango(m.fecha) && (ui.histTipo === 'todos' || m.tipo === ui.histTipo)).slice(0, 150);
   return `
-  <div class="chips">
-    <button class="chip ${ui.histTab === 'actividad' ? 'on' : ''}" data-act="hist-tab" data-tab="actividad">Actividad del equipo</button>
-    <button class="chip ${ui.histTab === 'movimientos' ? 'on' : ''}" data-act="hist-tab" data-tab="movimientos">Movimientos de stock</button>
+  <div class="toolbar" style="margin-bottom: 8px;">
+    <div class="chips" style="margin: 0;">
+      <button class="chip ${ui.histTab === 'actividad' ? 'on' : ''}" data-act="hist-tab" data-tab="actividad">Actividad del equipo</button>
+      <button class="chip ${ui.histTab === 'movimientos' ? 'on' : ''}" data-act="hist-tab" data-tab="movimientos">Movimientos de stock</button>
+    </div>
+    <button class="btn soft sm" data-act="exportar-kardex" title="Descargar movimientos de stock en tabla de Excel (.xlsx)">${icon('download')}<span>Exportar Kardex (Excel)</span></button>
+  </div>
+  <div class="chips small" style="margin-bottom: 12px;">
+    ${[['todos', 'Cualquier fecha'], ['hoy', 'Hoy'], ['7d', 'Últimos 7 días'], ['30d', 'Últimos 30 días']].map(([r, lbl]) => `<button class="chip ${ui.histRango === r ? 'on' : ''}" data-act="hist-rango" data-rango="${r}">${lbl}</button>`).join('')}
   </div>
   ${ui.histTab === 'actividad' ? `
   <section class="card flush"><div class="table-wrap"><table class="table">
     <thead><tr><th>Fecha</th><th>Usuario</th><th>Acción</th></tr></thead>
-    <tbody>${s.historial.slice(0, 150).map(h => `<tr><td class="nowrap">${fechaHora(h.fecha)}</td><td>${esc(h.usuarioNombre)}</td><td>${esc(h.accion)}</td></tr>`).join('')}</tbody>
+    <tbody>${historialFiltrado.map(h => `<tr><td class="nowrap">${fechaHora(h.fecha)}</td><td>${esc(h.usuarioNombre)}</td><td>${esc(h.accion)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">Sin registros en este periodo.</td></tr>'}</tbody>
   </table></div></section>` : `
   <div class="chips small">${['todos', 'entrada', 'salida', 'ajuste'].map(t => `<button class="chip ${ui.histTipo === t ? 'on' : ''}" data-act="hist-tipo" data-tipo="${t}">${t === 'todos' ? 'Todos' : tipos[t][0] + 's'}</button>`).join('')}</div>
   <section class="card flush"><div class="table-wrap"><table class="table">
@@ -508,7 +569,7 @@ function vistaHistorial() {
       <td><span class="pill ${tipos[m.tipo][1]}">${tipos[m.tipo][0]}</span></td>
       <td class="r num ${m.cantidad > 0 ? 'pos-t' : 'neg-t'}">${m.cantidad > 0 ? '+' : ''}${Number(m.cantidad).toLocaleString('es-CO')}</td>
       <td class="r num nowrap">${m.stockAntes != null ? `${m.stockAntes} → ${m.stockDespues}` : '—'}</td>
-      <td class="mono small">${esc(m.origen)}${m.motivo ? `<small class="block muted">${esc(m.motivo)}</small>` : ''}</td><td>${esc(m.usuarioNombre)}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">Sin movimientos.</td></tr>'}</tbody>
+      <td class="mono small">${esc(m.origen)}${m.motivo ? `<small class="block muted">${esc(m.motivo)}</small>` : ''}</td><td>${esc(m.usuarioNombre)}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">Sin movimientos en este periodo.</td></tr>'}</tbody>
   </table></div></section>`}`;
 }
 
@@ -557,11 +618,24 @@ function confirmar(titulo, texto, boton, accion) {
   abrirModal({ titulo, cuerpo: `<div class="confirm">${tomi('preocupado', 'tomi-confirm')}<p>${texto}</p></div>`, enviar: boton, peligro: true, onSubmit: accion });
 }
 function toast(msg, estado = 'feliz') {
+  const cont = $('#toasts');
+  while (cont.children.length >= 2) {
+    cont.firstElementChild.remove();
+  }
   const t = document.createElement('div');
   t.className = 'toast ' + estado;
   t.setAttribute('role', 'status');
-  t.innerHTML = tomi(estado, 'tomi-toast') + `<span>${esc(msg)}</span>`;
-  $('#toasts').append(t);
+  const titulo = estado === 'preocupado' ? 'Tomi · Atención' : estado === 'celebrando' ? 'Tomi · ¡Listo!' : 'Tomi · Notificación';
+  t.innerHTML = `
+    ${tomi(estado, 'tomi-toast')}
+    <div class="toast-body">
+      <div class="toast-head"><b>${titulo}</b><small>Ahora</small></div>
+      <span>${esc(msg)}</span>
+    </div>
+    <button type="button" class="toast-close" aria-label="Cerrar notificación">×</button>
+  `;
+  t.querySelector('.toast-close')?.addEventListener('click', () => t.remove());
+  cont.append(t);
   setTimeout(() => t.classList.add('fuera'), 3800);
   setTimeout(() => t.remove(), 4200);
 }
@@ -674,14 +748,60 @@ function formUsuario(u) {
 }
 
 function htmlFactura(f) {
+  const metodosNom = { efectivo: 'Efectivo', transferencia: 'Transferencia / QR', tarjeta: 'Tarjeta Débito/Crédito' };
+  const subtotal = Math.round(f.total / 1.19);
+  const iva = f.total - subtotal;
+  const cliente = f.cliente || { nombre: 'Consumidor Final', documento: '222222222222' };
+  const metodo = metodosNom[f.metodoPago] || f.metodoPago || 'Efectivo';
+
   return `<div class="invoice print-area">
-    <div class="inv-head"><div><b class="inv-brand">FrescoStock</b><small>Supermercado · NIT 900.000.000-1</small></div><div class="r"><b class="mono">${f.numero}</b><small>${fechaHora(f.fecha)}</small></div></div>
-    <table class="inv-table"><thead><tr><th>Producto</th><th class="r">Cant.</th><th class="r">Precio</th><th class="r">Subtotal</th></tr></thead>
-    <tbody>${f.items.map(l => `<tr><td>${esc(l.nombre)}</td><td class="r">${fmtCant(l.cantidad, l.unidad)}</td><td class="r">${money(l.precio)}</td><td class="r">${money(l.cantidad * l.precio)}</td></tr>`).join('')}</tbody></table>
-    <div class="inv-total"><span>Total (IVA incluido)</span><b>${money(f.total)}</b></div>
-    <small class="muted">Atendió: ${esc(f.cajeroNombre)}${f.estado === 'anulada' ? ' · <b class="neg-t">FACTURA ANULADA</b>' : ''}</small>
+    <div class="inv-head">
+      <div>
+        <b class="inv-brand">🍅 FrescoStock</b>
+        <small>Supermercado FrescoStock S.A.S.</small>
+        <small>NIT: 900.543.210-1 · IVA Régimen Común</small>
+        <small>Carrera 45 # 26-85 · Tel: (601) 345-6789</small>
+      </div>
+      <div class="r">
+        <b class="mono" style="font-size: 1.15rem; color: var(--brand);">${f.numero}</b>
+        <small>${fechaHora(f.fecha)}</small>
+        <small>Caja 01 · ${esc(f.cajeroNombre)}</small>
+      </div>
+    </div>
+
+    <div class="inv-client">
+      <div><b>Cliente:</b> ${esc(cliente.nombre || 'Consumidor Final')}</div>
+      <div><b>Doc/NIT:</b> <span class="mono">${esc(cliente.documento || '222222222222')}</span></div>
+    </div>
+
+    <table class="inv-table">
+      <thead><tr><th>Producto</th><th class="r">Cant.</th><th class="r">Precio</th><th class="r">Subtotal</th></tr></thead>
+      <tbody>${f.items.map(l => `<tr><td>${esc(l.nombre)}</td><td class="r">${fmtCant(l.cantidad, l.unidad)}</td><td class="r">${money(l.precio)}</td><td class="r">${money(l.cantidad * l.precio)}</td></tr>`).join('')}</tbody>
+    </table>
+
+    <div class="inv-calc">
+      <div class="inv-calc-row"><span class="muted">Subtotal (sin IVA):</span><span class="num">${money(subtotal)}</span></div>
+      <div class="inv-calc-row"><span class="muted">IVA estimado (19%):</span><span class="num">${money(iva)}</span></div>
+      <div class="inv-total"><span>Total a pagar:</span><b class="num">${money(f.total)}</b></div>
+
+      <div class="inv-calc-row" style="margin-top: 4px; padding-top: 6px; border-top: 1px dashed var(--line);">
+        <span>Medio de pago:</span><b>${metodo}</b>
+      </div>
+      ${f.metodoPago === 'efectivo' && f.pagaCon != null ? `
+      <div class="inv-calc-row"><span class="muted">Efectivo recibido:</span><span class="num">${money(f.pagaCon)}</span></div>
+      <div class="inv-calc-row"><span class="muted">Cambio / Devuelta:</span><b class="num pos-t">${money(f.cambio || 0)}</b></div>
+      ` : ''}
+    </div>
+
+    <div class="inv-foot">
+      <div class="inv-barcode">|||| | ||| || |||||| | ||||</div>
+      <p>¡Gracias por su compra en FrescoStock!</p>
+      <small>Conserve este ticket para cambios o garantías (hasta 15 días).</small>
+      ${f.estado === 'anulada' ? '<div class="form-error" style="text-align:center; margin-top: 6px;">FACTURA ANULADA</div>' : ''}
+    </div>
   </div>`;
 }
+
 function verFactura(f, recienCreada) {
   abrirModal({
     titulo: recienCreada ? '¡Venta registrada!' : `Factura ${f.numero}`, clase: 'wide',
@@ -690,12 +810,346 @@ function verFactura(f, recienCreada) {
   });
 }
 
+function formCobro(total) {
+  let metodo = 'efectivo';
+  let pagaCon = total;
+
+  const actualizarCambio = () => {
+    const inputPaga = $('#cobro-paga');
+    const display = $('#cobro-cambio');
+    const valor = Number(inputPaga?.value) || 0;
+    const cambio = Math.max(0, valor - total);
+    if (display) {
+      display.textContent = money(cambio);
+      $('#cobro-cambio-wrap')?.classList.toggle('positivo', valor >= total);
+    }
+  };
+
+  abrirModal({
+    titulo: 'Cobrar venta',
+    enviar: 'Confirmar y Facturar',
+    clase: 'wide',
+    cuerpo: `
+      <div class="total" style="font-size: 1.25rem; margin-bottom: 8px;">
+        <span>Total a cobrar</span>
+        <b class="num" style="font-size: 1.8rem; color: var(--brand);">${money(total)}</b>
+      </div>
+      
+      <label class="field">
+        <span>Método de pago</span>
+        <div class="pay-grid" id="cobro-metodos">
+          <button type="button" class="pay-tile on" data-metodo="efectivo">${icon('coin')}<span>Efectivo</span></button>
+          <button type="button" class="pay-tile" data-metodo="transferencia">${icon('qr')}<span>Transferencia / QR</span></button>
+          <button type="button" class="pay-tile" data-metodo="tarjeta">${icon('creditCard')}<span>Tarjeta</span></button>
+        </div>
+      </label>
+
+      <div id="cobro-cash-section" class="stack">
+        <label class="field">
+          <span>Paga con cuánto efectivo ($)</span>
+          <input id="cobro-paga" name="pagaCon" type="number" min="${total}" step="500" value="${total}">
+          <div class="denoms">
+            <button type="button" data-denom="exacto">Exacto (${money(total)})</button>
+            <button type="button" data-denom="sumar" data-val="2000">+$2.000</button>
+            <button type="button" data-denom="sumar" data-val="5000">+$5.000</button>
+            <button type="button" data-denom="sumar" data-val="10000">+$10.000</button>
+            <button type="button" data-denom="sumar" data-val="20000">+$20.000</button>
+            <button type="button" data-denom="sumar" data-val="50000">+$50.000</button>
+          </div>
+        </label>
+        
+        <div class="cambio-box" id="cobro-cambio-wrap">
+          <div><span class="muted block small">Cambio / Devuelta</span><b>A entregar al cliente</b></div>
+          <span class="cambio-val num" id="cobro-cambio">$0</span>
+        </div>
+      </div>
+
+      <div class="form-grid" style="margin-top: 6px;">
+        ${campo('Cliente (Opcional)', '<input name="clienteNombre" value="Consumidor Final" placeholder="Nombre completo">')}
+        ${campo('Cédula o NIT', '<input name="clienteDoc" value="222222222222" placeholder="Número de documento">')}
+      </div>
+    `,
+    onSubmit: async fd => {
+      const datosCobro = {
+        metodoPago: metodo,
+        pagaCon: metodo === 'efectivo' ? Number(fd.get('pagaCon')) || total : total,
+        cliente: {
+          nombre: fd.get('clienteNombre'),
+          documento: fd.get('clienteDoc'),
+        },
+      };
+      const f = await store.crearFactura(ui.carrito.map(i => ({ ...i })), sesion, datosCobro);
+      ui.carrito = [];
+      render();
+      verFactura(f, true);
+    },
+  });
+
+  const modalEl = $('#modal');
+  modalEl.querySelectorAll('#cobro-metodos .pay-tile').forEach(btn => {
+    btn.addEventListener('click', () => {
+      modalEl.querySelectorAll('#cobro-metodos .pay-tile').forEach(b => b.classList.remove('on'));
+      btn.classList.add('on');
+      metodo = btn.dataset.metodo;
+      const cashSec = $('#cobro-cash-section');
+      if (cashSec) cashSec.style.display = metodo === 'efectivo' ? 'grid' : 'none';
+      const inputPaga = $('#cobro-paga');
+      if (inputPaga) {
+        inputPaga.required = metodo === 'efectivo';
+        if (metodo !== 'efectivo') inputPaga.value = total;
+      }
+    });
+  });
+
+  const inputPaga = $('#cobro-paga');
+  if (inputPaga) {
+    inputPaga.addEventListener('input', actualizarCambio);
+  }
+
+  modalEl.querySelectorAll('[data-denom]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.dataset.denom === 'exacto') {
+        inputPaga.value = total;
+      } else if (btn.dataset.denom === 'sumar') {
+        inputPaga.value = (Number(inputPaga.value) || total) + Number(btn.dataset.val);
+      }
+      actualizarCambio();
+    });
+  });
+}
+
+function exportarProductosCSV() {
+  const prods = activos().slice().sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  const encabezados = [
+    'Código de Barras',
+    'Producto',
+    'Categoría',
+    'Unidad',
+    'Costo Unitario',
+    'Precio Venta',
+    'Stock Actual',
+    'Stock Mínimo',
+    'Valor Total Stock',
+    'Estado',
+  ];
+  const filas = prods.map(p => {
+    const c = categoria(p.categoriaId);
+    const estado = p.stock <= 0 ? 'Agotado' : p.stock <= p.stockMinimo ? 'Bajo' : 'Disponible';
+    const costo = Number(p.costo) || 0;
+    const precio = Number(p.precioVenta) || 0;
+    const stock = Number(p.stock) || 0;
+    const minimo = Number(p.stockMinimo) || 0;
+    return [
+      String(p.codigoBarras || ''),
+      p.nombre,
+      c ? c.nombre : 'Sin categoría',
+      p.unidad,
+      costo,
+      precio,
+      stock,
+      minimo,
+      Math.round(stock * costo),
+      estado,
+    ];
+  });
+  const totalStock = r3(sum(prods, p => Number(p.stock) || 0));
+  const totalValor = Math.round(sum(prods, p => (Number(p.stock) || 0) * (Number(p.costo) || 0)));
+  const fechaStr = new Date().toISOString().slice(0, 10);
+  descargarCSV(`frescostock_inventario_${fechaStr}`, encabezados, filas, {
+    hoja: 'Inventario',
+    tipos: ['codigo', 'texto', 'texto', 'codigo', 'moneda', 'moneda', 'numero', 'numero', 'moneda', 'estado'],
+    totales: ['TOTAL', `${prods.length} productos`, '', '', '', '', totalStock, '', totalValor, ''],
+  });
+  toast('Tabla de inventario exportada a Excel.');
+}
+
+function exportarVentasCSV() {
+  const hoy0 = inicioDia();
+  const facturasHoy = S().facturas.filter(f => f.fecha >= hoy0);
+  const encabezados = ['Número', 'Fecha y Hora', 'Cajero', 'Cliente', 'Documento', 'Método de Pago', 'Total', 'Estado', 'Detalle Items'];
+  const filas = facturasHoy.map(f => [
+    f.numero,
+    fechaHora(f.fecha),
+    f.cajeroNombre,
+    f.cliente?.nombre || 'Consumidor Final',
+    String(f.cliente?.documento || '—'),
+    f.metodoPago || 'Efectivo',
+    Number(f.total) || 0,
+    f.estado === 'anulada' ? 'Anulada' : 'Pagada',
+    f.items.map(it => `${it.nombre} (${it.cantidad} ${it.unidad})`).join(' · '),
+  ]);
+  const totalVentas = Math.round(sum(facturasHoy.filter(f => f.estado === 'pagada'), f => Number(f.total) || 0));
+  const fechaStr = new Date().toISOString().slice(0, 10);
+  descargarCSV(`frescostock_ventas_${fechaStr}`, encabezados, filas, {
+    hoja: 'Ventas de Hoy',
+    tipos: ['codigo', 'texto', 'texto', 'texto', 'codigo', 'texto', 'moneda', 'estado', 'texto'],
+    totales: ['TOTAL PAGADAS', `${facturasHoy.length} facturas`, '', '', '', '', totalVentas, '', ''],
+  });
+  toast('Reporte de ventas de hoy exportado a Excel.');
+}
+
+function exportarKardexCSV() {
+  const movs = S().movimientos;
+  const encabezados = ['Fecha y Hora', 'Tipo', 'Producto', 'Cantidad', 'Stock Antes', 'Stock Después', 'Origen', 'Motivo', 'Usuario'];
+  const filas = movs.map(m => [
+    fechaHora(m.fecha),
+    m.tipo,
+    m.productoNombre,
+    Number(m.cantidad) || 0,
+    m.stockAntes ?? '—',
+    m.stockDespues ?? '—',
+    m.origen,
+    m.motivo || '',
+    m.usuarioNombre,
+  ]);
+  const fechaStr = new Date().toISOString().slice(0, 10);
+  descargarCSV(`frescostock_movimientos_${fechaStr}`, encabezados, filas, {
+    hoja: 'Movimientos Kardex',
+    tipos: ['texto', 'codigo', 'texto', 'numero', 'numero', 'numero', 'codigo', 'texto', 'texto'],
+  });
+  toast('Historial de movimientos exportado a Excel.');
+}
+
+let camaraStream = null;
+async function abrirCamaraEscaner() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    return toast('Tu navegador o dispositivo no soporta acceso a la cámara.', 'preocupado');
+  }
+
+  abrirModal({
+    titulo: 'Escanear código de barras con cámara',
+    clase: 'wide',
+    cuerpo: `
+      <div class="scanner-view">
+        <p class="muted">Apunta la cámara al código de barras del producto.</p>
+        <div class="scanner-wrap">
+          <video id="scanner-video" autoplay playsinline muted></video>
+          <div class="scanner-reticle"></div>
+          <div class="scanner-laser"></div>
+        </div>
+        <p class="small muted" id="scanner-info">Buscando código de barras…</p>
+      </div>
+    `,
+    extra: '',
+  });
+
+  const video = $('#scanner-video');
+  const info = $('#scanner-info');
+
+  try {
+    camaraStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } },
+    });
+    if (video) {
+      video.srcObject = camaraStream;
+      await video.play();
+    }
+
+    const modalEl = $('#modal');
+    modalEl.addEventListener('close', () => {
+      if (camaraStream) {
+        camaraStream.getTracks().forEach(t => t.stop());
+        camaraStream = null;
+      }
+    }, { once: true });
+
+    if ('BarcodeDetector' in window) {
+      const detector = new window.BarcodeDetector({
+        formats: ['ean_13', 'ean_8', 'code_128', 'qr_code', 'upc_a', 'upc_e'],
+      });
+
+      let activo = true;
+      const escanearFrame = async () => {
+        if (!activo || !video || video.readyState < 2 || !modalEl.open) return;
+        try {
+          const barcodes = await detector.detect(video);
+          if (barcodes.length > 0) {
+            activo = false;
+            const codigo = barcodes[0].rawValue;
+            beep();
+            modalEl.close();
+            procesarCodigoEscaneado(codigo);
+            return;
+          }
+        } catch {}
+        if (modalEl.open) requestAnimationFrame(escanearFrame);
+      };
+      requestAnimationFrame(escanearFrame);
+    } else {
+      if (info) info.textContent = 'Detección por cámara lista. Enfoca el código o escribe el número abajo.';
+    }
+  } catch (err) {
+    if (info) info.textContent = 'No se pudo acceder a la cámara: ' + err.message;
+  }
+}
+
+function beep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.connect(g); g.connect(ctx.destination);
+    osc.frequency.value = 880;
+    osc.type = 'sine';
+    g.gain.setValueAtTime(0.12, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
+    osc.start(); osc.stop(ctx.currentTime + 0.15);
+  } catch {}
+}
+
+function procesarCodigoEscaneado(codigo) {
+  const exacto = activos().find(p => p.codigoBarras === codigo.trim());
+  if (exacto) {
+    agregarAlCarrito(exacto.id);
+    toast(`¡Código leído! Agregado "${exacto.nombre}".`, 'celebrando');
+  } else {
+    toast(`Código ${codigo} no corresponde a ningún producto registrado.`, 'preocupado');
+  }
+}
+
+function darDeBajaVencido(d) {
+  const p = busca('productos', d.id);
+  if (!p) return;
+  abrirModal({
+    titulo: `Dar de baja por vencimiento · ${p.nombre}`,
+    enviar: 'Dar de baja (Merma)',
+    peligro: true,
+    cuerpo: `<p class="muted">Este lote de <b>${esc(p.nombre)}</b> venció o está próximo a expirar. Se restará del stock y quedará registrado en el historial como merma.</p>
+      <div class="form-grid">
+        ${campo('Cantidad a dar de baja', `<input name="cantidad" type="number" min="0" step="${p.unidad === 'und' ? '1' : '0.1'}" value="${d.cant || 1}" required>`)}
+        ${campo('Motivo', `<input name="motivo" value="Producto vencido (Lote ${esc(d.lote || '—')})" readonly>`)}
+        ${campo('Nota adicional (opcional)', '<input name="nota" placeholder="Ej: Retirado de estantería por vencimiento">')}
+      </div>`,
+    onSubmit: async fd => {
+      const cant = -Math.abs(Number(fd.get('cantidad')));
+      const motivo = fd.get('motivo') + (fd.get('nota').trim() ? ` · ${fd.get('nota').trim()}` : '');
+      await store.ajustarStock(p.id, cant, motivo, sesion);
+      toast(`Se dio de baja ${Math.abs(cant)} ${p.unidad} de ${p.nombre}.`, 'celebrando');
+    },
+  });
+}
+
 // ---------- acciones ----------
 const busca = (col, id) => S()[col].find(x => x.id === id);
 const ACCIONES = {
   'ir': d => { ruta = d.ruta; ui.menu = false; render(); window.scrollTo({ top: 0 }); },
   'menu': () => { ui.menu = !ui.menu; render(); },
-  'demo-login': async d => { try { sesion = await store.login(d.email); ruta = 'inicio'; render(); toast(`¡Bienvenido, ${sesion.nombre.split(' ')[0]}!`, 'celebrando'); } catch (e) { toast(e.message, 'preocupado'); } },
+  'toggle-sonido': () => {
+    const activo = alternarSonido();
+    toast(activo ? 'Sonidos de Tomi activados 🔊' : 'Sonidos de Tomi silenciados 🔇', 'feliz');
+    render();
+  },
+  'demo-login': async d => {
+    try {
+      sesion = await store.login(d.email);
+      ruta = 'inicio';
+      render();
+      toast(`¡Bienvenido, ${sesion.nombre.split(' ')[0]}!`, 'celebrando');
+      saludarAlEntrar(sesion.nombre);
+    } catch (e) {
+      toast(e.message, 'preocupado');
+    }
+  },
   'salir': async () => { await store.logout(); sesion = null; ui.menu = false; ui.carrito = []; render(); },
   'instalar': async () => { if (!instalador) return; instalador.prompt(); await instalador.userChoice; instalador = null; render(); },
   'reset': () => { ui.menu = false; render(); confirmar('Reiniciar demo', 'Se borran tus cambios y vuelven los datos de ejemplo.', 'Reiniciar', async () => { await store.reset(); ui.carrito = []; ui.recep = { proveedorId: '', items: [filaVacia()] }; toast('Datos de la demo reiniciados.'); }); },  'modal-cerrar': () => $('#modal').close(),
@@ -710,6 +1164,12 @@ const ACCIONES = {
   'cat-eliminar': async d => { try { await store.remove('categorias', d.id, sesion); formCategorias(); toast('Categoría eliminada.'); } catch (e) { const p = $('#modal-error'); p.textContent = e.message; p.hidden = false; } },
 
   'caja-cat': d => { ui.cajaCat = d.cat; render(); },
+  'camara': () => abrirCamaraEscaner(),
+  'exportar-productos': () => exportarProductosCSV(),
+  'exportar-ventas': () => exportarVentasCSV(),
+  'exportar-kardex': () => exportarKardexCSV(),
+  'baja-vencimiento': d => darDeBajaVencido(d),
+  'hist-rango': d => { ui.histRango = d.rango; render(); },
   'agregar': d => agregarAlCarrito(d.id),
   'mas': d => agregarAlCarrito(d.id),
   'menos': d => {
@@ -719,10 +1179,10 @@ const ACCIONES = {
     render();
   },
   'vaciar': () => { ui.carrito = []; render(); },
-  'cobrar': async (d, btn) => {
-    btn.disabled = true;
-    try { const f = await store.crearFactura(ui.carrito.map(i => ({ ...i })), sesion); ui.carrito = []; render(); verFactura(f, true); }
-    catch (e) { btn.disabled = false; toast(e.message, 'preocupado'); }
+  'cobrar': () => {
+    const lineas = ui.carrito.map(it => ({ ...it, p: S().productos.find(p => p.id === it.productoId) })).filter(l => l.p);
+    const total = sum(lineas, l => Math.round(l.cantidad * l.p.precioVenta));
+    formCobro(total);
   },
   'factura-ver': d => verFactura(busca('facturas', d.id)),
   'factura-anular': d => { const f = busca('facturas', d.id); confirmar('Anular factura', `La factura ${f.numero} por ${money(f.total)} quedará anulada y sus productos volverán al stock.`, 'Anular factura', async () => { await store.anularFactura(f.id, sesion); toast(`${f.numero} anulada. Stock devuelto.`); }); },
@@ -804,8 +1264,32 @@ document.addEventListener('change', e => {
   if (e.target.matches('[data-recprov]')) { ui.recep.proveedorId = e.target.value; render(); }
 });
 
-// Escáner de código de barras: los lectores USB escriben el código y envían Enter.
+// Escáner de código de barras y atajos de teclado rápidos para la caja
 document.addEventListener('keydown', e => {
+  // F2: Enfocar barra de búsqueda / lector en caja
+  if (e.key === 'F2') {
+    e.preventDefault();
+    if (ruta !== 'caja') { ruta = 'caja'; render(); }
+    const input = $('#cajaQ');
+    if (input) { input.focus(); input.select(); }
+    return;
+  }
+  // F4: Cobrar venta si hay productos
+  if (e.key === 'F4' && ruta === 'caja' && ui.carrito.length > 0 && !$('#modal')?.open) {
+    e.preventDefault();
+    const lineas = ui.carrito.map(it => ({ ...it, p: S().productos.find(p => p.id === it.productoId) })).filter(l => l.p);
+    const total = sum(lineas, l => Math.round(l.cantidad * l.p.precioVenta));
+    formCobro(total);
+    return;
+  }
+  // Escape: limpiar búsqueda si no hay modal abierto
+  if (e.key === 'Escape' && !$('#modal')?.open && ruta === 'caja' && ui.cajaQ) {
+    ui.cajaQ = '';
+    render();
+    return;
+  }
+
+  // Enter en el buscador de caja: procesa escaneo con lector USB o teclado
   if (e.key !== 'Enter' || e.target.id !== 'cajaQ') return;
   const q = ui.cajaQ.trim();
   const exacto = activos().find(p => p.codigoBarras === q);
@@ -826,6 +1310,7 @@ document.addEventListener('submit', async e => {
     ruta = 'inicio';
     render();
     toast(`¡Bienvenido, ${sesion.nombre.split(' ')[0]}!`, 'celebrando');
+    saludarAlEntrar(sesion.nombre);
   } catch (ex) { err.textContent = ex.message; err.hidden = false; }
 });
 
@@ -841,3 +1326,9 @@ if (RUTAS.some(r => r.id === atajo)) ruta = atajo; // accesos directos del ícon
 ubicarTomi(); // pantalla de carga mientras Firebase revisa la sesión
 sesion = await store.restoreSession();
 render();
+if (sesion) {
+  // Saluda amablemente al usuario cuando interactúa por primera vez si restauró sesión
+  window.addEventListener('pointerdown', () => {
+    saludarAlEntrar(sesion?.nombre);
+  }, { once: true });
+}

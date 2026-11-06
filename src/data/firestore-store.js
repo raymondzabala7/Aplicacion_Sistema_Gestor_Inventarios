@@ -166,10 +166,13 @@ export function createFirestoreStore() {
       await log(usuario, `Eliminó ${NOMBRE[col]} "${nombre}"`, col, id);
     },
 
-    crearFactura(items, usuario) {
+    crearFactura(items, usuario, datosCobro = {}) {
       const ref = doc(collection(db, 'facturas'));
       return operacion(items.map(i => i.productoId), ({ productos, consecutivo }) => {
-        const { factura, cambios } = planFactura({ productos, items, usuario, consecutivo: consecutivo + 1, ahora: Date.now() });
+        const { factura, cambios } = planFactura({
+          productos, items, usuario, consecutivo: consecutivo + 1, ahora: Date.now(),
+          ...datosCobro,
+        });
         return {
           cambios, tipo: 'salida', origen: 'facturas/' + factura.numero, usuario,
           extra: tx => { tx.set(ref, factura); tx.set(cfgRef, { factura: consecutivo + 1 }, { merge: true }); },

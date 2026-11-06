@@ -112,9 +112,12 @@ export function createLocalStore() {
       commit();
     },
 
-    async crearFactura(items, usuario) {
+    async crearFactura(items, usuario, datosCobro = {}) {
       const productos = items.map(i => state.productos.find(p => p.id === i.productoId));
-      const { factura, cambios } = planFactura({ productos, items, usuario, consecutivo: state.config.consecutivo + 1, ahora: Date.now() });
+      const { factura, cambios } = planFactura({
+        productos, items, usuario, consecutivo: state.config.consecutivo + 1, ahora: Date.now(),
+        ...datosCobro,
+      });
       state.config.consecutivo += 1;
       const doc = { id: uid(), ...factura };
       state.facturas.unshift(doc);

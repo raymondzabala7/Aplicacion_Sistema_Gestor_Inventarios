@@ -6,8 +6,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#12301A">
   <meta name="description"
-    content="Inventario del supermercado: stock por categorías, entregas de proveedores y facturación.">
-  <title>FrescoStock</title>
+    content="Inventario del supermercado: stock por categorías, entregas de proveedores y facturación con Tomi.">
+  <title>FrescoStock · Gestor de Inventario</title>
+
+  <link rel="icon" type="image/svg+xml" href="icon-192.svg">
+  <link rel="apple-touch-icon" href="icon-192.svg">
+  <link rel="manifest" href="manifest.json">
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet"
@@ -23,6 +28,14 @@
   </div>
   <dialog id="modal"></dialog>
   <div id="toasts" aria-live="polite"></div>
+
+  <script>
+    if ('serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.hostname === 'localhost')) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(err => console.debug('SW:', err));
+      });
+    }
+  </script>
   <script type="module" src="/src/main.js"></script>
 </body>
 
