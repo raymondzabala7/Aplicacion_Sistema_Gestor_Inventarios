@@ -1,42 +1,44 @@
 {
+  "id": "./",
   "name": "FrescoStock · Gestor de Inventario",
   "short_name": "FrescoStock",
   "description": "Gestor de inventario y punto de venta para supermercado con stock en tiempo real y alertas automáticas.",
+  "lang": "es",
+  "dir": "ltr",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "orientation": "any",
-  "background_color": "#F8F5EF",
+  "background_color": "#12301A",
   "theme_color": "#12301A",
+  "categories": ["business", "productivity", "shopping"],
   "icons": [
-    {
-      "src": "./icon-192.svg",
-      "sizes": "192x192",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "./icon-512.svg",
-      "sizes": "512x512",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
-    }
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "./icon-512.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
   ],
   "shortcuts": [
     {
       "name": "Caja y POS",
+      "short_name": "Caja",
       "url": "./#caja",
-      "description": "Nueva venta rápida"
+      "description": "Nueva venta rápida",
+      "icons": [{ "src": "./icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "Recepción",
       "url": "./#recepcion",
-      "description": "Recepción de mercancía"
+      "description": "Recepción de mercancía",
+      "icons": [{ "src": "./icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "Alertas de Stock",
+      "short_name": "Alertas",
       "url": "./#alertas",
-      "description": "Revisar stock bajo y vencimientos"
+      "description": "Revisar stock bajo y vencimientos",
+      "icons": [{ "src": "./icon-192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ]
 }

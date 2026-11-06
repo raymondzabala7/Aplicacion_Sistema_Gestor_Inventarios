@@ -666,6 +666,23 @@ kbd { background: var(--surface-2); border: 1px solid var(--line); border-radius
 .tut-dot.on { width: 24px; background: var(--brand); }
 .tut-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 10px; }
 .tut-spacer { flex: 1; }
+/* Vista previa de una ventana (cobro, factura) como tercera columna de la tarjeta */
+.tut-panel.con-vista, #tutorial.sin-foco .tut-panel.con-vista { width: min(1040px, calc(100vw - 32px)); grid-template-columns: 140px minmax(0, 1fr) minmax(0, 360px); }
+.tut-vista { display: grid; gap: 8px; align-content: start; padding: 14px; font-size: .85rem; background: var(--surface-2); border-left: 1px solid var(--line); pointer-events: none; }
+.tut-vista-tit { display: flex; align-items: center; gap: 8px; font-family: var(--f-display); font-weight: 600; font-size: 1rem; }
+.tut-vista .total { padding: 8px 12px; }
+.tut-vista .total b { font-size: 1.35rem; }
+.tut-vista .pay-grid { gap: 6px; margin: 0; }
+.tut-vista .pay-tile { padding: 8px 4px; font-size: .76rem; text-align: center; }
+.tut-vista .denoms { margin: 0; }
+.tut-vista .denoms span { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; font-size: .76rem; font-weight: 600; }
+.tut-vista .cambio-box { padding: 8px 12px; }
+.tut-vista .cambio-val { font-size: 1.25rem; }
+.tut-vista-cliente { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: .76rem; color: var(--muted); }
+.tut-vista-btn { justify-self: stretch; pointer-events: none; }
+.tut-vista-factura { padding: 12px; font-size: .8rem; gap: 8px; }
+.tut-vista-factura .inv-brand { font-size: 1.05rem; }
+.tut-vista-factura .inv-total b { font-size: 1.15rem; }
 /* Tarjeta al lado (más angosta): botones compactos para que quepan en una línea */
 .tut-panel:not(.apilado) .tut-foot { flex-wrap: nowrap; gap: 6px; }
 .tut-panel:not(.apilado) .tut-foot .btn { padding: 7px 12px; font-size: .88rem; }
@@ -675,6 +692,10 @@ kbd { background: var(--surface-2); border: 1px solid var(--line); border-radius
   .tut-panel.apilado.abajo { bottom: max(8px, env(safe-area-inset-bottom, 0px)); }
   .tut-panel.apilado.arriba { top: max(8px, env(safe-area-inset-top, 0px)); }
   .tut-tomi { min-height: 72px; }
+  /* En el celular la vista previa va debajo del texto y solo con lo esencial */
+  .tut-panel.con-vista, #tutorial.sin-foco .tut-panel.con-vista { grid-template-columns: 72px minmax(0, 1fr); max-height: calc(100vh - 16px); overflow-y: auto; }
+  .tut-vista { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); padding: 10px 12px; gap: 6px; }
+  .tut-vista .tax-box, .tut-vista-tit, .tut-vista-cliente, .tut-vista-factura .inv-calc { display: none; }
   .tut-body { padding: 12px; gap: 8px; }
   .tut-card h2 { font-size: 1.08rem; }
   .tut-card p { font-size: .9rem; line-height: 1.45; }

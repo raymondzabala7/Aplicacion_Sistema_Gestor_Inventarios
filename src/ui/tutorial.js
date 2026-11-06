@@ -1,6 +1,7 @@
 // Tutorial "Aprende con Tomi": los pasos que ve cada rol.
 // Cada paso dice para qué roles aplica (roles), qué pantalla abre (ruta), qué parte de ella se resalta
-// (foco: un selector CSS; en el código las partes llevan data-tut) y cómo se ve Tomi (estado).
+// (foco: un selector CSS, o una lista: se usa el primero que exista; en el código las partes
+// llevan data-tut), si muestra una vista previa de una ventana (vista) y cómo se ve Tomi (estado).
 // `texto` puede ser un solo texto o uno distinto por rol: { admin, bodega, cajero }.
 // Para cambiar lo que explica Tomi, edita solo este archivo.
 
@@ -38,14 +39,25 @@ export const PASOS = [
   {
     id: 'caja-cobrar', roles: ['admin', 'cajero'], ruta: 'caja', foco: '[data-tut="caja-cobrar"]', icono: 'coin', estado: 'feliz',
     titulo: 'Caja: cobrar y facturar',
-    texto: 'Presiona Cobrar y facturar o la tecla F4. Elige efectivo, transferencia o QR, o tarjeta. Si es en efectivo, escribe con cuánto paga el cliente y yo calculo la devuelta. Al confirmar se crea la factura y el stock se descuenta solo.',
+    texto: 'Cuando la venta esté lista, presiona Cobrar y facturar o la tecla F4. Se abre la ventana de cobro, que te muestro en el siguiente paso.',
+  },
+  {
+    // vista: en vez de resaltar algo de la pantalla, la tarjeta muestra una vista previa de esa ventana.
+    id: 'caja-ventana-cobro', roles: ['admin', 'cajero'], ruta: 'caja', foco: null, vista: 'cobro', icono: 'coin', estado: 'feliz',
+    titulo: 'La ventana de cobro',
+    texto: 'Arriba ves el subtotal sin IVA, el IVA del 5 y del 19 por ciento y el total a pagar. Elige efectivo, transferencia o QR, o tarjeta. En efectivo, escribe con cuánto paga el cliente o usa los botones Exacto, más 2.000, 5.000, 10.000, 20.000 o 50.000, y yo calculo la devuelta que debes entregar. El cliente es opcional: si no lo pides, queda como Consumidor Final con el NIT genérico. Termina con Confirmar y facturar.',
+  },
+  {
+    id: 'caja-imprimir', roles: ['admin', 'cajero'], ruta: 'caja', foco: ['[data-act="factura-ver"]', '[data-tut="caja-facturas"]'], vista: 'factura', icono: 'print', estado: 'celebrando',
+    titulo: 'Imprimir la factura',
+    texto: 'Al confirmar aparece la factura con el botón Imprimir, para entregarle el comprobante al cliente. Si la necesitas después, en Facturas de hoy toca Ver y luego Imprimir. Solo se imprime la factura, sin el resto de la pantalla.',
   },
   {
     id: 'caja-facturas', roles: ['admin', 'cajero'], ruta: 'caja', foco: '[data-tut="caja-facturas"]', icono: 'receipt', estado: 'feliz',
     titulo: 'Facturas de hoy',
     texto: {
-      admin: 'Abajo de la caja ves las facturas del día: puedes abrirlas, imprimirlas y exportar las ventas. Como administrador también puedes anular una factura: queda marcada como anulada y los productos vuelven al stock.',
-      cajero: 'Abajo de la caja ves las facturas del día: puedes abrirlas, imprimirlas y exportar las ventas. Si hay que anular una factura, pídeselo al administrador.',
+      admin: 'Abajo de la caja ves las facturas del día con su método de pago. Puedes exportar las ventas del día a Excel. Como administrador también puedes anular una factura: queda marcada como anulada y los productos vuelven al stock.',
+      cajero: 'Abajo de la caja ves las facturas del día con su método de pago, y puedes exportar las ventas del día a Excel. Si hay que anular una factura, pídeselo al administrador.',
     },
   },
   {

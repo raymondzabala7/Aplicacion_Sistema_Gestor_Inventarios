@@ -297,11 +297,49 @@ function pintarTutorial() {
         ${primero ? '<button class="btn ghost" data-act="tut-cerrar">Ahora no</button>' : '<button class="btn ghost" data-act="tut-ant">Anterior</button>'}
         ${ultimo ? `<button class="btn primary" data-act="tut-cerrar">${icon('check')}Terminar</button>` : `<button class="btn primary" data-act="tut-sig">${primero ? 'Empezar' : 'Siguiente'}</button>`}
       </div>
-    </div>`;
+    </div>
+    ${p.vista ? `<div class="tut-vista" aria-hidden="true">${vistaPreviaTutorial(p.vista)}</div>` : ''}`;
   ubicarTomi();
   posicionarTutorial(true);
   setTimeout(() => posicionarTutorial(), 350); // por si las imágenes cambian el tamaño de la pantalla
   if (voz) leerEnVoz(textoParaVoz(p)); else callarVoz();
+}
+
+// Ventanas que se abren solo con una venta en curso (cobro, factura): el tutorial muestra
+// una copia de ejemplo hecha con las mismas clases, sin tocar el carrito ni crear facturas.
+function vistaPreviaTutorial(nombre) {
+  if (nombre === 'cobro') {
+    return `
+      <p class="tut-vista-tit">${icon('coin')}Cobrar venta</p>
+      <div class="tax-box">
+        <div class="tax-row"><span>Subtotal sin IVA <small>(base gravable)</small></span><span class="num">${money(13067)}</span></div>
+        <div class="tax-row"><span>Total IVA 5%</span><span class="num">${money(233)}</span></div>
+        <div class="tax-row"><span>Total IVA 19%</span><span class="num">${money(0)}</span></div>
+      </div>
+      <div class="total"><span>Total a pagar <small>IVA incluido</small></span><b class="num">${money(13300)}</b></div>
+      <div class="pay-grid">
+        <span class="pay-tile on">${icon('coin')}<span>Efectivo</span></span>
+        <span class="pay-tile">${icon('qr')}<span>Transf. / QR</span></span>
+        <span class="pay-tile">${icon('creditCard')}<span>Tarjeta</span></span>
+      </div>
+      <div class="denoms"><span>Exacto</span><span>+$2.000</span><span>+$5.000</span><span>+$10.000</span><span>+$20.000</span><span>+$50.000</span></div>
+      <div class="cambio-box positivo"><div><span class="muted block small">Paga con ${money(20000)}</span><b>Devuelta</b></div><span class="cambio-val num">${money(6700)}</span></div>
+      <p class="tut-vista-cliente"><span>Cliente: Consumidor Final</span><span>NIT 222222222222</span></p>
+      <span class="btn primary tut-vista-btn">Confirmar y facturar</span>`;
+  }
+  if (nombre === 'factura') {
+    return `
+      <div class="invoice tut-vista-factura">
+        <div class="inv-head"><div><b class="inv-brand">FrescoStock</b><small>Factura de venta</small></div><div class="r"><b class="mono">FV-000123</b><small>Efectivo</small></div></div>
+        <div class="inv-calc">
+          <div class="inv-calc-row"><span>Leche entera 1 L × 2</span><span class="num">${money(9800)}</span></div>
+          <div class="inv-calc-row"><span>Tomate chonto 1 kg</span><span class="num">${money(3500)}</span></div>
+        </div>
+        <div class="inv-total"><span>Total</span><b>${money(13300)}</b></div>
+      </div>
+      <span class="btn soft tut-vista-btn">${icon('print')}Imprimir</span>`;
+  }
+  return '';
 }
 
 // Resalta la parte del paso actual y pone la tarjeta del lado contrario para no taparla.
@@ -311,21 +349,25 @@ function posicionarTutorial(desplazar = false) {
   const p = ui.tut.pasos[ui.tut.i];
   const luz = t.querySelector('.tut-luz');
   const panel = t.querySelector('.tut-panel');
-  const el = p.foco && document.querySelector(p.foco);
-  const visible = el && el.getClientRects().length && el.getBoundingClientRect().width > 0;
+  // foco puede ser una lista: se usa la primera parte que esté en pantalla.
+  const el = [].concat(p.foco || []).map(s => document.querySelector(s))
+    .find(e => e && e.getClientRects().length && e.getBoundingClientRect().width > 0);
+  const visible = Boolean(el);
   t.classList.toggle('sin-foco', !visible);
-  panel.className = 'tut-panel';
+  panel.className = p.vista ? 'tut-panel con-vista' : 'tut-panel';
   panel.removeAttribute('style');
   if (!visible) { luz.hidden = true; return; }
 
   const vw = window.innerWidth, vh = window.innerHeight, M = 16;
   const bajar = y => { if (desplazar && Math.abs(y) > 1) window.scrollBy({ top: y, behavior: 'instant' }); };
+  // Si está dentro de una tabla que se desplaza de lado (celular), primero la mueve hasta verlo.
+  if (desplazar) el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
   let r = el.getBoundingClientRect();
   let zona; // franja de la pantalla que la tarjeta no tapa: ahí debe quedar lo señalado
 
   // 1) Al lado: en PC, si a la derecha o a la izquierda cabe la tarjeta, va ahí y no tapa nada.
   const W = panel.offsetWidth;
-  const lado = vw > 900 && (vw - r.right >= W + 2 * M ? 'der' : r.left >= W + 2 * M ? 'izq' : null);
+  const lado = vw > 900 && !p.vista && (vw - r.right >= W + 2 * M ? 'der' : r.left >= W + 2 * M ? 'izq' : null);
   if (lado) {
     bajar(r.top - Math.max(M, (vh - r.height) / 2));
     r = el.getBoundingClientRect();
