@@ -630,6 +630,34 @@ kbd { background: var(--surface-2); border: 1px solid var(--line); border-radius
   .toast { max-width: 100%; }
 }
 
+/* ---------- tutorial "Aprende con Tomi" ---------- */
+.tut-btn { gap: 6px; padding-left: 6px; }
+.tomi-btn { width: 24px; height: 26px; flex: none; }
+dialog#tutorial { width: min(820px, calc(100vw - 32px)); }
+.tut { display: grid; grid-template-columns: 260px minmax(0, 1fr); min-height: 420px; }
+.tut-tomi { background: radial-gradient(circle at 50% 60%, var(--brand-soft), var(--surface-2) 70%); min-height: 260px; }
+.tut-body { display: flex; flex-direction: column; gap: 16px; padding: 20px 24px 22px; min-width: 0; }
+.tut-top { display: flex; align-items: center; gap: 10px; }
+.tut-top .icon-btn { margin-left: auto; }
+.tut-card { flex: 1; display: grid; align-content: start; gap: 10px; }
+.tut-card h2 { font-size: 1.55rem; }
+.tut-card p { font-size: 1.05rem; line-height: 1.6; color: var(--ink); max-width: 60ch; }
+.tut-ic { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; background: var(--brand-soft); color: var(--brand); }
+.tut-ic .ic { width: 24px; height: 24px; }
+.tut-ir { display: inline-flex; align-items: center; gap: 6px; justify-self: start; }
+.tut-dots { display: flex; flex-wrap: wrap; gap: 6px; }
+.tut-dot { width: 10px; height: 10px; padding: 0; border: 0; border-radius: 999px; background: var(--line); transition: width .2s, background .2s; }
+.tut-dot.on { width: 26px; background: var(--brand); }
+.tut-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 14px; }
+.tut-spacer { flex: 1; }
+@media (max-width: 680px) {
+  .tut { grid-template-columns: minmax(0, 1fr); }
+  .tut-tomi { min-height: 180px; height: 180px; }
+  .tut-body { padding: 16px; }
+  .tut-card h2 { font-size: 1.3rem; }
+  .tut-foot .btn.sm span { display: none; }
+}
+
 @media print {
   body * { visibility: hidden; }
   .print-area, .print-area * { visibility: visible; }

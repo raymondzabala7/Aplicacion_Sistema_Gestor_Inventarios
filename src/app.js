@@ -12,7 +12,8 @@ import {
 import { iconoProducto as iconoDe, imagenPorDefectoProducto } from './domain/iconos.js';
 import { tomi } from './ui/tomi.js';
 import { tomi3D } from './ui/tomi3d.js';
-import { saludarAlEntrar, alternarSonido, sonidoHabilitado } from './ui/tomi-audio.js';
+import { saludarAlEntrar, alternarSonido, sonidoHabilitado, leerEnVoz, callarVoz } from './ui/tomi-audio.js';
+import { pasosPara, textoParaVoz } from './ui/tutorial.js';
 
 const store = createStore();
 
@@ -193,7 +194,8 @@ function ubicarTomi() {
     const lugar = slot.dataset.tomi3d;
     const estado = slot.dataset.estado || 'feliz';
     const frasesLugar = obtenerFrases(lugar);
-    if (lugar === 'logo') tomi3D('logo').colocar(slot, { globo: false, estado, alHablar: reaccion });
+    if (lugar === 'tutorial') tomi3D('tutorial').colocar(slot, { globo: false, estado });
+    else if (lugar === 'logo') tomi3D('logo').colocar(slot, { globo: false, estado, alHablar: reaccion });
     else tomi3D().colocar(slot, { globo: false, frases: frasesLugar, estado, alHablar: reaccion });
   });
 }
@@ -221,6 +223,7 @@ function shell(r, contenido) {
         <div class="top-actions">
           <span class="today">${icon('calendar')}${hoy}</span>
           ${instalador ? `<button class="btn soft sm" data-act="instalar">${icon('download')}<span>Instalar app</span></button>` : ''}
+          <button class="btn soft sm tut-btn" data-act="tutorial" title="Tutorial de tu rol con Tomi">${tomi('feliz', 'tomi-btn')}<span>Aprende con Tomi</span></button>
           <button class="icon-btn" data-act="toggle-sonido" title="${sonidoHabilitado() ? 'Silenciar sonidos de Tomi' : 'Activar sonidos de Tomi'}" aria-label="Sonido">${icon(sonidoHabilitado() ? 'volume' : 'mute')}</button>
           <button class="icon-btn bell" data-act="ir" data-ruta="alertas" aria-label="Alertas: ${nAlertas}">${icon('bell')}${nAlertas ? `<em>${nAlertas}</em>` : ''}</button>
           <div class="me">
@@ -235,6 +238,83 @@ function shell(r, contenido) {
     </div>
     <nav class="bottom-nav">${rutas.map(link).join('')}</nav>
   </div>`;
+}
+
+// ---------- tutorial "Aprende con Tomi" ----------
+// Muestra solo los pasos del rol que inició sesión (src/ui/tutorial.js), con texto y voz.
+const TUT_VOZ = 'frescostock_tutorial_voz';
+const tutVisto = () => 'frescostock:tutorial-visto:' + sesion?.id;
+const vozTutorial = () => { try { return localStorage.getItem(TUT_VOZ) !== 'false'; } catch { return true; } };
+
+function dialogoTutorial() {
+  let d = $('#tutorial');
+  if (!d) {
+    d = document.createElement('dialog');
+    d.id = 'tutorial';
+    d.setAttribute('aria-label', 'Tutorial de FrescoStock');
+    // Al cerrar (botón o Esc) se calla la voz y se vacía, para que Tomi deje de dibujarse.
+    d.addEventListener('close', () => { callarVoz(); ui.tut = null; d.innerHTML = ''; });
+    document.body.append(d);
+  }
+  return d;
+}
+
+function abrirTutorial(i = 0) {
+  if (!sesion) return;
+  ui.tut = { pasos: pasosPara(sesion.rol), i };
+  ui.menu = false;
+  try { localStorage.setItem(tutVisto(), '1'); } catch {}
+  const d = dialogoTutorial();
+  pintarTutorial();
+  if (!d.open) d.showModal();
+}
+
+function pintarTutorial() {
+  const { pasos, i } = ui.tut;
+  const p = pasos[i];
+  const destino = p.ruta && RUTAS.find(r => r.id === p.ruta);
+  const primero = i === 0;
+  const ultimo = i === pasos.length - 1;
+  const voz = vozTutorial();
+  $('#tutorial').innerHTML = `
+  <div class="tut">
+    <div class="tut-tomi" data-tomi3d="tutorial" data-estado="${p.estado}"></div>
+    <div class="tut-body">
+      <div class="tut-top">
+        <span class="pill info">Tutorial · ${ROL[sesion.rol]}</span>
+        <span class="muted small">Paso ${i + 1} de ${pasos.length}</span>
+        <button class="icon-btn" data-act="tut-cerrar" aria-label="Cerrar tutorial">${icon('x')}</button>
+      </div>
+      <div class="tut-card" aria-live="polite">
+        <span class="tut-ic">${icon(p.icono)}</span>
+        <h2>${esc(p.titulo)}</h2>
+        <p>${esc(p.texto)}</p>
+        ${destino ? `<button class="link tut-ir" data-act="tut-ir">${icon(destino.icon)}Ir a ${esc(destino.label)}</button>` : ''}
+      </div>
+      <div class="tut-dots">${pasos.map((_, k) => `<button class="tut-dot ${k === i ? 'on' : ''}" data-act="tut-paso" data-i="${k}" aria-label="Ir al paso ${k + 1}"></button>`).join('')}</div>
+      <div class="tut-foot">
+        <button class="btn ghost sm" data-act="tut-voz" aria-pressed="${voz}">${icon(voz ? 'volume' : 'mute')}<span>${voz ? 'Voz activada' : 'Voz apagada'}</span></button>
+        ${voz ? `<button class="btn ghost sm" data-act="tut-repetir">${icon('refresh')}<span>Repetir</span></button>` : ''}
+        <div class="tut-spacer"></div>
+        ${primero ? '<button class="btn ghost" data-act="tut-cerrar">Ahora no</button>' : '<button class="btn ghost" data-act="tut-ant">Anterior</button>'}
+        ${ultimo ? `<button class="btn primary" data-act="tut-cerrar">${icon('check')}Terminar</button>` : `<button class="btn primary" data-act="tut-sig">${primero ? 'Empezar' : 'Siguiente'}</button>`}
+      </div>
+    </div>
+  </div>`;
+  ubicarTomi();
+  if (voz) leerEnVoz(textoParaVoz(p)); else callarVoz();
+}
+
+function irAPaso(i) {
+  if (!ui.tut) return;
+  ui.tut.i = Math.max(0, Math.min(ui.tut.pasos.length - 1, i));
+  pintarTutorial();
+}
+
+// La primera vez que alguien inicia sesión en este navegador, Tomi ofrece el tutorial.
+function ofrecerTutorial() {
+  try { if (localStorage.getItem(tutVisto())) return; } catch { return; }
+  setTimeout(() => { if (sesion && !$('#modal')?.open) abrirTutorial(0); }, 1600);
 }
 
 // ---------- login ----------
@@ -1215,6 +1295,23 @@ const busca = (col, id) => S()[col].find(x => x.id === id);
 const ACCIONES = {
   'ir': d => { ruta = d.ruta; ui.menu = false; render(); window.scrollTo({ top: 0 }); },
   'menu': () => { ui.menu = !ui.menu; render(); },
+  'tutorial': () => abrirTutorial(0),
+  'tut-sig': () => irAPaso(ui.tut.i + 1),
+  'tut-ant': () => irAPaso(ui.tut.i - 1),
+  'tut-paso': d => irAPaso(Number(d.i)),
+  'tut-repetir': () => leerEnVoz(textoParaVoz(ui.tut.pasos[ui.tut.i])),
+  'tut-voz': () => {
+    try { localStorage.setItem(TUT_VOZ, vozTutorial() ? 'false' : 'true'); } catch {}
+    pintarTutorial();
+  },
+  'tut-cerrar': () => $('#tutorial').close(),
+  'tut-ir': () => {
+    const destino = ui.tut.pasos[ui.tut.i].ruta;
+    $('#tutorial').close();
+    ruta = destino;
+    render();
+    window.scrollTo({ top: 0 });
+  },
   'toggle-sonido': () => {
     const activo = alternarSonido();
     toast(activo ? 'Sonidos de Tomi activados 🔊' : 'Sonidos de Tomi silenciados 🔇', 'feliz');
@@ -1227,6 +1324,7 @@ const ACCIONES = {
       render();
       toast(`¡Bienvenido, ${sesion.nombre.split(' ')[0]}!`, 'celebrando');
       saludarAlEntrar(sesion.nombre);
+      ofrecerTutorial();
     } catch (e) {
       toast(e.message, 'preocupado');
     }
@@ -1358,6 +1456,12 @@ document.addEventListener('change', e => {
 
 // Escáner de código de barras y atajos de teclado rápidos para la caja
 document.addEventListener('keydown', e => {
+  // Con el tutorial abierto, las flechas pasan de paso y los atajos de caja no actúan.
+  if ($('#tutorial')?.open) {
+    if (e.key === 'ArrowRight') irAPaso(ui.tut.i + 1);
+    if (e.key === 'ArrowLeft') irAPaso(ui.tut.i - 1);
+    return;
+  }
   // F2: Enfocar barra de búsqueda / lector en caja
   if (e.key === 'F2') {
     e.preventDefault();
@@ -1403,6 +1507,7 @@ document.addEventListener('submit', async e => {
     render();
     toast(`¡Bienvenido, ${sesion.nombre.split(' ')[0]}!`, 'celebrando');
     saludarAlEntrar(sesion.nombre);
+    ofrecerTutorial();
   } catch (ex) { err.textContent = ex.message; err.hidden = false; }
 });
 

@@ -152,6 +152,28 @@ export function decirConVoz(texto) {
 }
 
 // Saluda con sonido y voz al entrar según el nombre del usuario
+// Voz del tutorial: tiene su propio botón de audio, por eso no depende de sonidoHabilitado().
+export function leerEnVoz(texto) {
+  if (!('speechSynthesis' in window)) return;
+  try {
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(texto);
+    const voces = window.speechSynthesis.getVoices?.() || [];
+    const vozEs = voces.find(v => v.lang && v.lang.toLowerCase().startsWith('es'));
+    if (vozEs) u.voice = vozEs;
+    u.lang = vozEs?.lang || 'es-ES';
+    u.pitch = 1.3;
+    u.rate = 1.05;
+    window.speechSynthesis.speak(u);
+  } catch (err) {
+    console.debug('Error en síntesis de voz:', err);
+  }
+}
+
+export function callarVoz() {
+  if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+}
+
 export function saludarAlEntrar(nombreCompleto) {
   const primerNombre = nombreCompleto ? nombreCompleto.trim().split(/\s+/)[0] : '';
   const saludoTexto = primerNombre ? `¡Hola, ${primerNombre}!` : '¡Hola!';
