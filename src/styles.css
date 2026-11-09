@@ -432,11 +432,12 @@ b > .prod-img { display: inline-block; width: 22px; height: 22px; border-radius:
 .tile.low { border-color: color-mix(in srgb, var(--amarillo) 70%, var(--line)); }
 /* Caja de la foto: blanca como el fondo de las fotos, alto fijo; la foto queda de ~116 px (más
    pequeña que el original de 200 px, por eso se ve nítida). */
-.tile-emoji { width: 100%; height: 128px; display: flex; align-items: center; justify-content: center; padding: 10px 12px 12px; margin-bottom: 10px; background: #fff; border-bottom: 1px solid var(--line); border-radius: 14px 14px 0 0; font-size: 3rem; line-height: 1; }
+.tile-emoji { width: 100%; height: 84px; display: flex; align-items: center; justify-content: flex-start; padding: 6px 0 10px; margin-bottom: 10px; background: #fff; border-bottom: 1px solid var(--line); border-radius: 14px 14px 0 0; font-size: 3rem; line-height: 1; }
 /* Foto del catálogo: área fija, producto centrado y completo, nunca más grande que el archivo
    original (200-220 px). Mientras se mide su encuadre (solo la primera vez) no se muestra, para
    que no "salte" de tamaño. */
-.tile-emoji .prod-img { max-width: 100%; max-height: 100%; image-rendering: auto; transition: opacity .2s ease; }
+/* Tamaño de la foto en la tarjeta: pequeña y arriba a la izquierda (~68 px), siempre nítida. */
+.tile-emoji .prod-img { width: 72px; height: 68px; max-width: 100%; max-height: 100%; object-position: left center; image-rendering: auto; transition: opacity .2s ease; }
 .tile-emoji .prod-img[data-encuadrar] { opacity: 0; }
 .tile-count { position: absolute; top: 10px; right: 10px; min-width: 30px; height: 30px; padding: 0 8px; border-radius: 999px; display: grid; place-items: center; font-style: normal; font-weight: 800; font-size: .84rem; background: var(--verde); color: #fff; border: 2px solid #fff; box-shadow: 0 4px 10px rgba(21, 148, 71, .35); animation: badge-pulse 1.8s infinite ease-in-out; }
 .tile b { font-size: .95rem; line-height: 1.25; min-height: 2.5em; color: var(--ink); }
@@ -813,7 +814,7 @@ kbd { background: var(--surface-2); border: 1px solid var(--line); border-radius
   .chips::-webkit-scrollbar { display: none; }
   .tiles { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
   .tile { padding: 8px 10px 12px; }
-  .tile-emoji { height: 108px; padding: 8px 10px 10px; }
+  .tile-emoji { height: 80px; padding: 6px 0 10px; }
   .tile-price { font-size: 1.1rem; }
   .kbd-hint { display: none; }
   .form-grid { grid-template-columns: minmax(0, 1fr); }
