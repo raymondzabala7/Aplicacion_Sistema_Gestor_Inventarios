@@ -86,8 +86,8 @@ export const PASOS = [
     id: 'alertas', roles: TODOS, ruta: 'alertas', foco: '[data-tut="alertas"]', icono: 'bell', estado: 'preocupado',
     titulo: 'Alertas',
     texto: {
-      admin: 'La campanita avisa cuando un producto llega a su stock mínimo o se agota; tócala para ver las alertas sin salir de la pantalla. Aquí puedes ir directo a recibirlo y marcar la alerta como atendida. Si un lote está por vencer, toca Llamar al proveedor para pedirle el cambio. Cuando entra mercancía, la alerta se cierra sola.',
-      bodega: 'La campanita avisa cuando un producto llega a su stock mínimo o se agota; tócala para ver las alertas sin salir de la pantalla. Aquí puedes ir directo a recibirlo. Si un lote está por vencer, toca Llamar al proveedor para pedirle el cambio. Las alertas las marca como atendidas el administrador, y se cierran solas cuando entra mercancía.',
+      admin: 'La campanita avisa cuando un producto llega a su stock mínimo o se agota; tócala para ver las alertas sin salir de la pantalla. Aquí puedes ir directo a recibirlo. Si un lote está por vencer, toca Llamar al proveedor para pedirle el cambio. Cuando entra mercancía, la alerta se cierra sola.',
+      bodega: 'La campanita avisa cuando un producto llega a su stock mínimo o se agota; tócala para ver las alertas sin salir de la pantalla. Aquí puedes ir directo a recibirlo. Si un lote está por vencer, toca Llamar al proveedor para pedirle el cambio. Cuando entra mercancía, la alerta se cierra sola.',
       cajero: 'La campanita avisa cuando un producto llega a su stock mínimo o se agota; tócala para verlas. Aquí solo puedes leerlas: si un cliente pide algo agotado o ves stock bajo, avísale al administrador.',
     },
   },

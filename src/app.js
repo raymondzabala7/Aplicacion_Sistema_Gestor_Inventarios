@@ -347,7 +347,7 @@ function panelAvisos() {
       ${activas.length > 6 ? `<p class="muted small">Y ${activas.length - 6} más…</p>` : ''}`
       : `<p class="avisos-vacio">${icon('check')}No hay alertas de stock. ¡Todo en orden!</p>`}
     ${vencen ? `<p class="avisos-vence">${icon('calendar')}${vencen} lote${vencen === 1 ? '' : 's'} vence${vencen === 1 ? '' : 'n'} en los próximos 7 días</p>` : ''}
-    ${puede('admin') ? '' : '<p class="avisos-nota">Solo lectura. Si ves stock bajo, avísale al administrador.</p>'}
+    ${puede('admin', 'bodega') ? '' : '<p class="avisos-nota">Solo lectura. Si ves stock bajo, avísale al administrador.</p>'}
     <button class="btn soft block" data-act="ir" data-ruta="alertas">Ver todas las alertas</button>
   </div>`;
 }
@@ -925,14 +925,14 @@ function vistaAlertas() {
   </div>
   <div class="grid-2" data-tut="alertas">
     <section class="card">
-      <div class="card-head"><h3><span class="h-ic bad">${icon('bell')}</span>Stock bajo y agotados</h3>${puede('admin') ? '' : '<span class="pill info">Solo lectura</span>'}</div>
+      <div class="card-head"><h3><span class="h-ic bad">${icon('bell')}</span>Stock bajo y agotados</h3>${puede('admin', 'bodega') ? '' : '<span class="pill info">Solo lectura</span>'}</div>
       <ul class="list">${activas.map(a => `<li class="alert-li ${a.tipo}">
         <span class="prod-emoji">${imgProducto(s.productos.find(p => p.id === a.productoId) || { nombre: a.productoNombre })}</span>
         <div class="li-main"><b>${esc(a.productoNombre)}</b><small>Quedan ${a.stock} · mínimo ${a.stockMinimo ?? '—'} · ${fechaHora(a.fecha)}</small></div>
         <span class="pill ${a.tipo === 'agotado' ? 'bad' : 'warn'}">${a.tipo === 'agotado' ? 'Agotado' : 'Stock bajo'}</span>
         <div class="row">${puede('admin', 'bodega') ? `<button class="btn soft sm" data-act="recibir" data-id="${a.productoId}">Recibir</button>` : ''}
-        ${puede('admin') ? `<button class="btn ghost sm" data-act="alerta-atender" data-id="${a.id}">${icon('check')}Atendida</button>` : ''}</div></li>`).join('') || `<li class="muted">Nada por aquí.</li>`}</ul>
-      ${puede('admin') ? '' : '<p class="muted note solo-lectura">Puedes ver las alertas, pero solo el administrador las marca como atendidas. Si ves stock bajo, avísale.</p>'}
+        </div></li>`).join('') || `<li class="muted">Nada por aquí.</li>`}</ul>
+      <p class="muted note solo-lectura">Cada alerta se cierra sola cuando entra mercancía y el producto supera su stock mínimo.${puede('admin', 'bodega') ? '' : ' Si ves stock bajo, avísale al administrador.'}</p>
     </section>
     <section class="card">
       <div class="card-head"><h3><span class="h-ic warn">${icon('calendar')}</span>Por vencer en 7 días</h3><span class="muted">según lotes recibidos</span></div>
