@@ -44,11 +44,65 @@ const pillIva = p => {
 };
 
 // Miniatura del producto: su foto o ilustración incluida si la tiene; si no, el emoji correspondiente.
-function imgProducto(p, alt = '') {
+// encuadrar (tarjetas del catálogo): la foto se muestra encuadrada sobre el producto (ver abajo).
+function imgProducto(p, alt = '', encuadrar = false) {
   const src = imagenPorDefectoProducto(p);
   // Sin loading="lazy": al redibujar, una imagen perezosa queda un instante en blanco y parpadea.
-  if (src) return `<img class="prod-img" src="${esc(src)}" alt="${esc(alt || p?.nombre || '')}">`;
-  return iconoProducto(p);
+  if (!src) return iconoProducto(p);
+  const enc = encuadrar && ENCUADRE ? encuadres.get(src) : undefined;
+  const estilo = enc ? estiloEncuadre(enc) : '';
+  const extra = !encuadrar || !ENCUADRE ? '' : enc === undefined ? ' data-encuadrar' : estilo ? ` style="${estilo}"` : '';
+  return `<img class="prod-img" src="${esc(src)}" alt="${esc(alt || p?.nombre || '')}"${extra}>`;
+}
+
+// Encuadre de las fotos del catálogo: las fotos son cuadradas con margen transparente o blanco,
+// así que un producto ancho (galletas, huevos) se veía bajito y uno alto (botellas) delgado.
+// Se mide UNA vez dónde está el producto dentro de cada foto y se muestra solo esa zona
+// (object-view-box + object-fit: contain): todos llenan el espacio de forma pareja, sin
+// recortar el producto, sin deformarlo y sin tocar el archivo original. Los navegadores que no
+// conocen object-view-box muestran la foto completa como siempre.
+// Nitidez: la foto nunca se agranda más allá de sus píxeles reales en PC (pantallas de hasta 2x);
+// en celulares de 3x se permite un poco más, porque a esa densidad no se nota.
+const ENCUADRE = typeof CSS !== 'undefined' && CSS.supports?.('object-view-box', 'inset(0)');
+const encuadres = new Map(); // src -> { marco: 'inset(…)', w, h } (marco '' si no se pudo medir)
+function estiloEncuadre({ marco, w, h }) {
+  if (!marco) return '';
+  const d = Math.min(window.devicePixelRatio || 1, 2);
+  return `object-view-box:${marco};max-width:min(100%,${(w / d).toFixed(1)}px);max-height:min(100%,${(h / d).toFixed(1)}px)`;
+}
+function aplicarEncuadre(img, enc) {
+  const estilo = estiloEncuadre(enc);
+  if (estilo) img.setAttribute('style', estilo);
+  img.removeAttribute('data-encuadrar');
+}
+function medirEncuadre(img) {
+  const src = img.getAttribute('src');
+  if (encuadres.has(src)) return aplicarEncuadre(img, encuadres.get(src));
+  if (!img.complete || !img.naturalWidth) { img.addEventListener('load', () => medirEncuadre(img), { once: true }); return; }
+  const enc = { marco: '', w: 0, h: 0 };
+  try {
+    const w = img.naturalWidth, h = img.naturalHeight;
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const ctx = c.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0);
+    const d = ctx.getImageData(0, 0, w, h).data;
+    let x0 = w, y0 = h, x1 = -1, y1 = -1;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const k = (y * w + x) * 4;
+      const fondo = d[k + 3] < 24 || (d[k] > 240 && d[k + 1] > 240 && d[k + 2] > 240); // transparente o blanco
+      if (fondo) continue;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+    if (x1 >= x0 && y1 >= y0) {
+      const aire = Math.round(Math.max(x1 - x0, y1 - y0) * 0.04); // un poco de aire alrededor
+      const t = Math.max(0, y0 - aire), l = Math.max(0, x0 - aire), b = Math.max(0, h - 1 - y1 - aire), r = Math.max(0, w - 1 - x1 - aire);
+      const pct = (v, total) => `${((v / total) * 100).toFixed(2)}%`;
+      enc.marco = `inset(${pct(t, h)} ${pct(r, w)} ${pct(b, h)} ${pct(l, w)})`;
+      enc.w = w - l - r; enc.h = h - t - b; // píxeles reales de la zona que se muestra
+    }
+  } catch { /* imagen de otro dominio: se muestra completa */ }
+  encuadres.set(src, enc);
+  document.querySelectorAll('img[data-encuadrar]').forEach(i => { if (i.getAttribute('src') === src) aplicarEncuadre(i, enc); });
 }
 
 // Reduce la foto a un cuadrado de 256 px (JPEG) para que quepa bien en la base de datos.
@@ -95,6 +149,7 @@ const ICON = {
   fileText: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>',
   volume: '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>',
   mute: '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/>',
+  phone: '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3.1-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/>',
 };
 const icon = (n, c = '') => `<svg class="ic ${c}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n]}</svg>`;
 
@@ -151,10 +206,23 @@ function render() {
   const mismaPantalla = rutaPintada === r.id && Boolean($('.layout'));
   const y = window.scrollY;
   app.classList.toggle('quieto', mismaPantalla);
+  // Listas con su propio desplazamiento (carrito, categorías, tablas): se guarda dónde iban para
+  // que al tocar "+" en el último producto la lista no salte al principio.
+  const DESPLAZABLES = '.cart, .chips, .table-wrap';
+  const desplazado = mismaPantalla ? [...document.querySelectorAll(DESPLAZABLES)].map(el => [el.scrollTop, el.scrollLeft]) : [];
   app.innerHTML = shell(r, VISTAS[r.id]());
+  document.querySelectorAll(DESPLAZABLES).forEach((el, i) => { if (desplazado[i]) [el.scrollTop, el.scrollLeft] = desplazado[i]; });
+  // La línea que se acaba de agregar o sumar queda a la vista dentro del carrito.
+  const nueva = $('.cart li.nuevo'), carrito = $('.cart');
+  if (nueva && carrito) {
+    const a = nueva.getBoundingClientRect(), c = carrito.getBoundingClientRect();
+    if (a.bottom > c.bottom) carrito.scrollTop += a.bottom - c.bottom;
+    else if (a.top < c.top) carrito.scrollTop -= c.top - a.top;
+  }
   rutaPintada = r.id;
   ui.recienAgregado = null;
   if (mismaPantalla && window.scrollY !== y) window.scrollTo({ top: y, behavior: 'instant' });
+  document.querySelectorAll('img[data-encuadrar]').forEach(medirEncuadre); // fotos del catálogo aún sin medir
   ubicarTomi();
   posicionarTutorial(); // la pantalla se redibujó: el resaltado sigue a su parte
 
@@ -191,7 +259,7 @@ const FRASES = {
   alertas: [
     '¡Revisemos qué productos necesitan reposición!',
     'Un producto agotado es una venta perdida.',
-    'Puedes dar de baja los lotes vencidos directamente.',
+    'Si un lote está por vencer, llama al proveedor para cambiarlo.',
   ],
 };
 
@@ -232,7 +300,7 @@ function shell(r, contenido) {
   return `
   <div class="layout">
     <aside class="side">
-      <div class="brand"><div class="tomi-logo3d" data-tomi3d="logo" title="Tomi"></div><span>Fresco<b>Stock</b></span></div>
+      <div class="brand"><div class="tomi-logo3d" data-tomi3d="logo" title="Tomi"></div><span>Fresco<b>Stock</b></span><small>Tu negocio en buenas manos</small></div>
       <nav class="nav" data-tut="menu">${grupos.map(g => `<div class="nav-group">${g ? `<span class="nav-title">${g}</span>` : ''}${rutas.filter(x => x.grupo === g).map(link).join('')}</div>`).join('')}</nav>
       <div class="side-foot">
         <div class="side-user"><span class="avatar">${esc(sesion.nombre[0])}</span><span><b>${esc(sesion.nombre)}</b><small>${ROL[sesion.rol]}</small></span></div>
@@ -240,14 +308,17 @@ function shell(r, contenido) {
       </div>
     </aside>
     <div class="content">
-      <header class="top">
-        <div class="top-title"><h1>${r.titulo}</h1><p>${r.sub}</p></div>
+      <header class="topbar">
+        <label class="top-search">${icon('search')}<input id="globalQ" type="search" placeholder="Buscar productos o códigos…" aria-label="Buscar productos en toda la app" autocomplete="off"><kbd>Enter</kbd></label>
         <div class="top-actions">
           <span class="today">${icon('calendar')}${hoy}</span>
           ${instalador ? `<button class="btn soft sm" data-act="instalar">${icon('download')}<span>Instalar app</span></button>` : ''}
-          <button class="btn soft sm tut-btn" data-act="tutorial" title="Tutorial de tu rol con Tomi">${tomi('feliz', 'tomi-btn')}<span>Aprende con Tomi</span></button>
+          ${r.id === 'inicio' ? '' /* en Inicio ya está el botón de la tarjeta de Tomi */ : `<button class="btn soft sm tut-btn" data-act="tutorial" title="Tutorial de tu rol con Tomi">${tomi('feliz', 'tomi-btn')}<span>Aprende con Tomi</span></button>`}
           <button class="icon-btn" data-act="toggle-sonido" title="${sonidoHabilitado() ? 'Silenciar sonidos de Tomi' : 'Activar sonidos de Tomi'}" aria-label="Sonido">${icon(sonidoHabilitado() ? 'volume' : 'mute')}</button>
-          <button class="icon-btn bell" data-act="ir" data-ruta="alertas" aria-label="Alertas: ${nAlertas}">${icon('bell')}${nAlertas ? `<em>${nAlertas}</em>` : ''}</button>
+          <div class="avisos-wrap">
+            <button class="icon-btn bell ${ui.avisos ? 'on' : ''}" data-act="avisos" aria-expanded="${Boolean(ui.avisos)}" aria-label="Alertas: ${nAlertas}">${icon('bell')}${nAlertas ? `<em>${nAlertas}</em>` : ''}</button>
+            ${ui.avisos ? panelAvisos() : ''}
+          </div>
           <div class="me">
             <button class="me-btn" data-act="menu" aria-expanded="${ui.menu}"><span class="avatar">${esc(sesion.nombre[0])}</span><span class="me-txt"><b>${esc(sesion.nombre)}</b><small>${ROL[sesion.rol]}</small></span></button>
             ${ui.menu ? `<div class="menu">
@@ -256,9 +327,28 @@ function shell(r, contenido) {
           </div>
         </div>
       </header>
+      ${r.id === 'inicio' ? '' : `<div class="top"><div class="top-title"><h1>${r.titulo}</h1><p>${r.sub}</p></div></div>`}
       <main class="view">${contenido}</main>
     </div>
     <nav class="bottom-nav">${rutas.map(link).join('')}</nav>
+  </div>`;
+}
+
+// Panel de la campanita: lista de alertas solo para leer (sin botones que cambien datos).
+function panelAvisos() {
+  const activas = alertasActivas();
+  const vencen = lotesPorVencer().length;
+  return `<div class="avisos" role="dialog" aria-label="Alertas activas">
+    <div class="avisos-head"><b>Alertas</b><span class="pill ${activas.length ? 'bad' : 'ok'}">${activas.length} activa${activas.length === 1 ? '' : 's'}</span></div>
+    ${activas.length ? `<ul class="avisos-list">${activas.slice(0, 6).map(a => `<li class="${a.tipo}">
+      <span class="prod-emoji">${imgProducto(S().productos.find(p => p.id === a.productoId) || { nombre: a.productoNombre })}</span>
+      <div><b>${esc(a.productoNombre)}</b><small>Quedan ${a.stock} · mínimo ${a.stockMinimo ?? '—'}</small></div>
+      <span class="pill ${a.tipo === 'agotado' ? 'bad' : 'warn'}">${a.tipo === 'agotado' ? 'Agotado' : 'Stock bajo'}</span></li>`).join('')}</ul>
+      ${activas.length > 6 ? `<p class="muted small">Y ${activas.length - 6} más…</p>` : ''}`
+      : `<p class="avisos-vacio">${icon('check')}No hay alertas de stock. ¡Todo en orden!</p>`}
+    ${vencen ? `<p class="avisos-vence">${icon('calendar')}${vencen} lote${vencen === 1 ? '' : 's'} vence${vencen === 1 ? '' : 'n'} en los próximos 7 días</p>` : ''}
+    ${puede('admin') ? '' : '<p class="avisos-nota">Solo lectura. Si ves stock bajo, avísale al administrador.</p>'}
+    <button class="btn soft block" data-act="ir" data-ruta="alertas">Ver todas las alertas</button>
   </div>`;
 }
 
@@ -501,61 +591,114 @@ function vistaInicio() {
   });
   const maxDia = Math.max(1, ...dias.map(d => d.total));
   const porCat = s.categorias.map(c => ({ c, total: sum(semana, f => sum(f.items.filter(l => l.categoriaId === c.id), l => l.cantidad * l.precio)) })).sort((a, b) => b.total - a.total);
-  const maxCat = Math.max(1, ...porCat.map(x => x.total));
   const frase = bajos.length
     ? `Hay ${bajos.length} producto${bajos.length > 1 ? 's' : ''} bajo el mínimo. ¡Toca reabastecer!`
     : '¡Todo el stock está en orden! Buen trabajo.';
   const vacio = !s.productos.length && puede('admin');
 
+  // --- Datos para los indicadores (todo sale de los datos reales) ---
+  const ayer = dias[5].total;
+  const cambio = ayer ? Math.round(((ventasHoy - ayer) / ayer) * 100) : null;
+  const tendencia = cambio == null ? '<small class="trend">Sin ventas ayer para comparar</small>'
+    : `<small class="trend ${cambio >= 0 ? 'up' : 'down'}">${cambio >= 0 ? '↑' : '↓'} ${Math.abs(cambio)}% <span>vs. ayer</span></small>`;
+  const linea = dias.map((d, i) => `${(i * 100 / 6).toFixed(1)},${(30 - (d.total / maxDia) * 26).toFixed(1)}`).join(' ');
+  const enStock = activos().filter(p => p.stock > 0).length;
+  const nAlertas = s.alertas.filter(a => !a.atendida).length;
+  const ticket = hoy.length ? ventasHoy / hoy.length : 0;
+  const recibido7 = Math.round(sum(entregas7, e => e.totalUnidades));
+
+  // --- Gráfico de barras con eje: tope "redondo" (1, 2, 2.5 o 5 × 10ⁿ) ---
+  const paso = (() => { const x = maxDia / 4; const p = 10 ** Math.floor(Math.log10(x)); const n = x / p; return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * p; })();
+  const tope = paso * 4;
+
+  // --- Dona de ventas por categoría ---
+  const COLORES = ['#159447', '#F6B942', '#FF634F', '#9B6BD6', '#2DBB61', '#F28C38', '#3C8DBC', '#064B32'];
+  const totalCat = sum(porCat, x => x.total);
+  let acum = 0;
+  const dona = totalCat ? `conic-gradient(${porCat.map((x, i) => { const de = acum; acum += (x.total / totalCat) * 100; return `${COLORES[i % COLORES.length]} ${de.toFixed(2)}% ${acum.toFixed(2)}%`; }).join(', ')})` : 'var(--surface-2)';
+
   return `
   ${vacio ? `<div class="card banner"><div><b>Todavía no hay productos.</b><p class="muted">Empieza creando las categorías y luego los productos.</p></div><button class="btn primary" data-act="ir" data-ruta="productos">Ir a Productos</button></div>` : ''}
-  <div class="greet card">
-    <div class="tomi-greet3d" data-tomi3d="inicio" data-estado="${bajos.length ? 'preocupado' : 'feliz'}" title="Tomi"></div>
-    <div><h2>¡Hola, ${esc(sesion.nombre.split(' ')[0])}!</h2><p>${frase}</p></div>
-    <div class="greet-actions">
-      ${puede('admin', 'cajero') ? `<button class="btn primary" data-act="ir" data-ruta="caja">${icon('cart')}Nueva venta</button>` : ''}
-      ${puede('admin', 'bodega') ? `<button class="btn soft" data-act="ir" data-ruta="recepcion">${icon('truck')}Recibir proveedor</button>` : ''}
+  <div class="home">
+    <div class="hello">
+      <div><h2><span class="wave" aria-hidden="true">👋</span> ¡Hola, ${esc(sesion.nombre.split(' ')[0])}!</h2><p>Aquí tienes un resumen de tu negocio hoy.</p></div>
+      <div class="greet-actions">
+        ${puede('admin', 'cajero') ? `<button class="btn primary" data-act="ir" data-ruta="caja">${icon('cart')}Nueva venta</button>` : ''}
+        ${puede('admin', 'bodega') ? `<button class="btn ghost" data-act="ir" data-ruta="recepcion">${icon('truck')}Recibir proveedor</button>` : ''}
+      </div>
     </div>
-  </div>
 
-  <div class="kpis" data-tut="kpis">
-    <div class="kpi"><span class="kpi-ic ok">${icon('coin')}</span><span>Ventas de hoy</span><b>${money(ventasHoy)}</b><small>${hoy.length} facturas</small></div>
-    <div class="kpi"><span class="kpi-ic accent">${icon('receipt')}</span><span>Ticket promedio</span><b>${money(hoy.length ? ventasHoy / hoy.length : 0)}</b><small>por factura hoy</small></div>
-    <div class="kpi"><span class="kpi-ic info">${icon('truck')}</span><span>Recibido en 7 días</span><b>${Math.round(sum(entregas7, e => e.totalUnidades)).toLocaleString('es-CO')} <i>und</i></b><small>${entregas7.length} entregas · ${money(sum(entregas7, e => e.totalCosto))}</small></div>
-    <div class="kpi ${bajos.length ? 'alert' : ''}"><span class="kpi-ic bad">${icon('bell')}</span><span>Bajo el mínimo</span><b>${bajos.length}</b><small>de ${activos().length} productos</small></div>
-    <div class="kpi"><span class="kpi-ic warn">${icon('box')}</span><span>Valor del inventario</span><b>${moneyCorto(valorInv)}</b><small>a precio de costo</small></div>
-  </div>
+    <aside class="home-rail">
+      <div class="tomi-card">
+        <p class="bubble">${frase}</p>
+        <div class="tomi-home3d" data-tomi3d="inicio" data-estado="${bajos.length ? 'preocupado' : 'feliz'}" title="Tomi"></div>
+        <button class="btn dark block" data-act="tutorial">${icon('fileText')}Aprende con Tomi</button>
+      </div>
+      <div class="status-card ${bajos.length ? 'atencion' : ''}">
+        <span class="status-ic">${icon(bajos.length ? 'bell' : 'check')}</span>
+        <h3>${bajos.length ? 'Revisa el inventario' : 'Todo en orden'}</h3>
+        <p>${bajos.length ? `${bajos.length} producto${bajos.length > 1 ? 's' : ''} bajo el mínimo y ${nAlertas} alerta${nAlertas === 1 ? '' : 's'} activa${nAlertas === 1 ? '' : 's'}.` : 'Tu inventario se encuentra estable y bajo control.'}</p>
+        <button class="btn light block" data-act="ir" data-ruta="alertas">Ver alertas →</button>
+      </div>
+      <div class="fact-card">
+        <span class="fact-ic">${icon('receipt')}</span>
+        <div><b>Facturación</b><small>${hoy.length} factura${hoy.length === 1 ? '' : 's'} hoy${s.facturas[0] ? ` · última ${esc(s.facturas[0].numero)}` : ''}</small></div>
+      </div>
+    </aside>
 
-  <div class="grid-2">
-    <section class="card">
-      <div class="card-head"><h3>Ventas de los últimos 7 días</h3><span class="muted">${money(sum(semana, f => f.total))}</span></div>
-      <div class="chart">${dias.map((d, i) => `<div class="col ${i === 6 ? 'hoy' : ''}">
-        <span class="val">${d.total ? moneyCorto(d.total) : '–'}</span>
-        <div class="bar-wrap"><div class="bar" style="height:${(d.total / maxDia) * 100}%"></div></div>
-        <span class="lbl">${i === 6 ? 'Hoy' : new Date(d.ini).toLocaleDateString('es-CO', { weekday: 'short' })}</span></div>`).join('')}</div>
-    </section>
-    <section class="card">
-      <div class="card-head"><h3>Ventas por categoría</h3><span class="muted">7 días</span></div>
-      <div class="hbars">${porCat.map(x => `<div class="hbar"><span>${x.c.icono} ${esc(x.c.nombre)}</span><div class="track"><i style="width:${(x.total / maxCat) * 100}%"></i></div><b>${moneyCorto(x.total)}</b></div>`).join('')}</div>
-    </section>
-  </div>
+    <div class="home-main">
+      <div class="kpis" data-tut="kpis">
+        <div class="kpi v-verde"><span class="kpi-ic">${icon('cart')}</span><div class="kpi-txt"><span>Ventas del día</span><b>${money(ventasHoy)}</b>${tendencia}
+          <svg class="spark" viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true"><polyline points="${linea}"/></svg><small>${hoy.length} facturas · ticket promedio ${money(ticket)}</small></div></div>
+        <div class="kpi v-naranja"><span class="kpi-ic">${icon('box')}</span><div class="kpi-txt"><span>Productos en stock</span><b>${enStock} <i>de ${activos().length}</i></b>
+          <div class="meter wide"><i class="ok" style="width:${activos().length ? (enStock / activos().length) * 100 : 0}%"></i></div><small>Recibido en 7 días: ${recibido7.toLocaleString('es-CO')} und · ${entregas7.length} entregas</small></div></div>
+        <div class="kpi v-verde2"><span class="kpi-ic">${icon('coin')}</span><div class="kpi-txt"><span>Valor del inventario</span><b>${moneyCorto(valorInv)}</b><small>a precio de costo · ${money(valorInv)}</small></div></div>
+        <div class="kpi v-coral ${bajos.length ? 'alert' : ''}"><span class="kpi-ic">${icon('bell')}</span><div class="kpi-txt"><span>Alertas activas</span><b>${nAlertas}</b><small>${bajos.length} bajo el mínimo de ${activos().length} productos</small>
+          <button class="link coral" data-act="ir" data-ruta="alertas">Ver detalles →</button></div></div>
+      </div>
 
-  <div class="grid-2">
-    <section class="card">
-      <div class="card-head"><h3>Stock bajo</h3><button class="link" data-act="ir" data-ruta="alertas">Ver alertas</button></div>
-      ${bajos.length ? `<ul class="list">${bajos.slice(0, 6).map(p => `<li>
-        <div class="li-main"><b>${imgProducto(p)} ${esc(p.nombre)}</b><small>${fmtCant(p.stock, p.unidad)} · mínimo ${fmtCant(p.stockMinimo, p.unidad)}</small></div>
-        ${pillStock(p)}
-        ${puede('admin', 'bodega') ? `<button class="btn soft sm" data-act="recibir" data-id="${p.id}">Pedir</button>` : ''}</li>`).join('')}</ul>`
-        : `<div class="empty">${tomi('feliz', 'tomi-empty')}<p>Ningún producto bajo el mínimo.</p></div>`}
-    </section>
-    <section class="card">
-      <div class="card-head"><h3>Últimas facturas</h3>${puede('admin', 'cajero') ? '<button class="link" data-act="ir" data-ruta="caja">Ir a caja</button>' : ''}</div>
-      <ul class="list">${s.facturas.slice(0, 6).map(f => `<li>
-        <div class="li-main"><b class="mono">${f.numero}</b><small>${fechaHora(f.fecha)} · ${esc(f.cajeroNombre)}</small></div>
-        ${f.estado === 'anulada' ? '<span class="pill bad">Anulada</span>' : ''}
-        <b class="num">${money(f.total)}</b></li>`).join('') || '<li class="muted">Todavía no hay ventas.</li>'}</ul>
-    </section>
+      <div class="grid-2 home-charts">
+        <section class="card">
+          <div class="card-head"><h3><span class="h-ic">${icon('coin')}</span>Ventas de los últimos 7 días</h3><span class="muted num">${money(sum(semana, f => f.total))}</span></div>
+          <div class="chart2">
+            <div class="ejes">${[4, 3, 2, 1, 0].map(k => `<span>${k ? moneyCorto(paso * k) : '0'}</span>`).join('')}</div>
+            <div class="barras">${dias.map((d, i) => `<div class="col ${i === 6 ? 'hoy' : ''}" title="${money(d.total)}">
+              <div class="bar-wrap">${i === 6 ? `<em class="tip">${money(d.total)}</em>` : ''}<div class="bar" style="height:${(d.total / tope) * 100}%"></div></div>
+              <span class="lbl">${i === 6 ? 'Hoy' : new Date(d.ini).toLocaleDateString('es-CO', { weekday: 'short' })}</span></div>`).join('')}</div>
+          </div>
+        </section>
+        <section class="card">
+          <div class="card-head"><h3><span class="h-ic">${icon('receipt')}</span>Ventas por categoría</h3><span class="muted">7 días</span></div>
+          <div class="donut-wrap">
+            <div class="donut" style="background:${dona}"><div><b>${moneyCorto(totalCat)}</b><small>Total</small></div></div>
+            <ul class="legend">${porCat.map((x, i) => `<li><i style="background:${COLORES[i % COLORES.length]}"></i><span>${x.c.icono} ${esc(x.c.nombre)}</span><b class="num">${moneyCorto(x.total)}</b></li>`).join('')}</ul>
+          </div>
+        </section>
+      </div>
+
+      <div class="grid-2">
+        <section class="card">
+          <div class="card-head"><h3><span class="h-ic bad">${icon('bell')}</span>Productos críticos</h3><button class="link coral" data-act="ir" data-ruta="alertas">Ver todos →</button></div>
+          ${bajos.length ? `<ul class="list crit">${bajos.slice(0, 6).map(p => `<li>
+            <span class="prod-emoji">${imgProducto(p)}</span>
+            <div class="li-main"><b>${esc(p.nombre)}</b><small>mínimo ${fmtCant(p.stockMinimo, p.unidad)}</small></div>
+            <span class="pill ${p.stock <= 0 ? 'bad' : 'warn'}">Stock: ${fmtCant(p.stock, p.unidad)}</span>
+            ${puede('admin', 'bodega') ? `<button class="btn soft sm" data-act="recibir" data-id="${p.id}">Pedir</button>` : ''}</li>`).join('')}</ul>`
+            : `<div class="empty">${tomi('feliz', 'tomi-empty')}<p>Ningún producto bajo el mínimo.</p></div>`}
+        </section>
+        <section class="card">
+          <div class="card-head"><h3><span class="h-ic">${icon('fileText')}</span>Últimas ventas</h3>${puede('admin', 'cajero') ? '<button class="link" data-act="ir" data-ruta="caja">Ir a caja →</button>' : ''}</div>
+          ${s.facturas.length ? `<div class="table-wrap"><table class="table compact ventas">
+            <thead><tr><th>Factura</th><th class="r">Productos</th><th class="r">Total</th><th>Fecha</th></tr></thead>
+            <tbody>${s.facturas.slice(0, 6).map(f => `<tr>
+              <td><b class="mono">${f.numero}</b><small class="block muted">${esc(f.cajeroNombre)}</small></td>
+              <td class="r">${f.items.length}</td>
+              <td class="r num"><b>${money(f.total)}</b>${f.estado === 'anulada' ? '<span class="pill bad">Anulada</span>' : ''}</td>
+              <td class="nowrap muted">${fechaHora(f.fecha)}</td></tr>`).join('')}</tbody></table></div>`
+            : '<p class="muted">Todavía no hay ventas.</p>'}
+        </section>
+      </div>
+    </div>
   </div>`;
 }
 
@@ -620,7 +763,7 @@ function vistaCaja() {
       <div class="kbd-hint">Atajos: <kbd>F2</kbd> Buscar · <kbd>F4</kbd> Cobrar · <kbd>Esc</kbd> Vaciar</div>
       ${chipsCategorias(ui.cajaCat, 'caja-cat', contar)}
       <div class="tiles">${lista.map(p => `<button class="tile ${p.stock <= 0 ? 'off' : p.stock <= p.stockMinimo ? 'low' : ''}" data-act="agregar" data-id="${p.id}" ${p.stock <= 0 ? 'disabled' : ''}>
-          <span class="tile-emoji">${imgProducto(p)}</span>
+          <span class="tile-emoji">${imgProducto(p, '', true)}</span>
           ${ui.carrito.some(i => i.productoId === p.id) ? `<em class="tile-count">${fmtCant(ui.carrito.find(i => i.productoId === p.id).cantidad, '').trim()}</em>` : ''}
           <b>${esc(p.nombre)}</b>
           <span class="tile-price">${money(p.precioVenta)}<small>/${p.unidad} · IVA ${ivaDe(p)}%</small></span>
@@ -628,7 +771,7 @@ function vistaCaja() {
         </button>`).join('') || `<div class="empty">${tomi('preocupado', 'tomi-empty')}<p>Sin resultados.</p></div>`}</div>
     </div>
     <aside class="ticket card" data-tut="caja-ticket">
-      <div class="card-head"><h3>Venta actual</h3><span class="ticket-num mono">${store.numeroSiguiente()}</span></div>
+      <div class="card-head"><h3><span class="h-ic">${icon('cart')}</span>Venta actual</h3><span class="ticket-num mono">${store.numeroSiguiente()}</span></div>
       ${lineas.length ? `<ul class="cart">${lineas.map(l => `<li class="${l.p.id === ui.recienAgregado ? 'nuevo' : ''}">
           <div class="li-main"><b>${imgProducto(l.p)} ${esc(l.p.nombre)}</b><small>${money(l.p.precioVenta)} / ${l.p.unidad} · IVA ${ivaDe(l.p)}%</small></div>
           <div class="qty"><button class="icon-btn sm" data-act="menos" data-id="${l.p.id}" aria-label="Quitar uno">${icon('minus')}</button><span class="num">${fmtCant(l.cantidad, l.p.unidad)}</span><button class="icon-btn sm" data-act="mas" data-id="${l.p.id}" aria-label="Agregar uno">${icon('plus')}</button></div>
@@ -649,7 +792,7 @@ function vistaCaja() {
   </div>
   <section class="card" data-tut="caja-facturas">
     <div class="card-head">
-      <div><h3>Facturas de hoy</h3><span class="muted">${hoy.filter(f => f.estado === 'pagada').length} pagadas · ${money(sum(hoy.filter(f => f.estado === 'pagada'), f => f.total))}</span></div>
+      <div><h3><span class="h-ic">${icon('receipt')}</span>Facturas de hoy</h3><span class="muted">${hoy.filter(f => f.estado === 'pagada').length} pagadas · ${money(sum(hoy.filter(f => f.estado === 'pagada'), f => f.total))}</span></div>
       ${hoy.length ? `<button class="btn soft sm" data-act="exportar-ventas" title="Descargar facturas de hoy en CSV">${icon('download')}<span>Exportar ventas</span></button>` : ''}
     </div>
     <div class="table-wrap"><table class="table">
@@ -685,7 +828,7 @@ function vistaRecepcion() {
   return `
   <div class="grid-recep">
     <section class="card" data-tut="recepcion">
-      <div class="card-head"><h3>Nueva entrega</h3><span class="muted">${new Date().toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })}</span></div>
+      <div class="card-head"><h3><span class="h-ic">${icon('truck')}</span>Nueva entrega</h3><span class="muted">${new Date().toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })}</span></div>
       <label class="field"><span>Proveedor</span>
         <select id="rec-prov" data-recprov>
           <option value="">Elige el proveedor…</option>
@@ -714,13 +857,13 @@ function vistaRecepcion() {
       </div>
     </section>
     <section class="card">
-      <div class="card-head"><h3>Recibido por proveedor</h3><span class="muted">últimos 30 días</span></div>
+      <div class="card-head"><h3><span class="h-ic">${icon('store')}</span>Recibido por proveedor</h3><span class="muted">últimos 30 días</span></div>
       <div class="table-wrap"><table class="table compact">
         <thead><tr><th>Proveedor</th><th class="r">Entregas</th><th class="r">Unidades</th><th class="r">Costo</th></tr></thead>
         <tbody>${resumen.map(x => `<tr><td>${esc(x.p.nombre)}</td><td class="r">${x.n}</td><td class="r num">${Math.round(x.u).toLocaleString('es-CO')}</td><td class="r num">${money(x.c)}</td></tr>`).join('')}</tbody>
         <tfoot><tr><td>Total</td><td class="r">${sum(resumen, x => x.n)}</td><td class="r num">${Math.round(sum(resumen, x => x.u)).toLocaleString('es-CO')}</td><td class="r num">${money(sum(resumen, x => x.c))}</td></tr></tfoot>
       </table></div>
-      <div class="card-head sub"><h3>Entregas recientes</h3></div>
+      <div class="card-head sub"><h3><span class="h-ic">${icon('clock')}</span>Entregas recientes</h3></div>
       <ul class="list">${s.entregas.slice(0, 6).map(e => `<li>
         <div class="li-main"><b>${esc(e.proveedorNombre)}</b><small>${fechaHora(e.fecha)} · recibió ${esc(e.recibidoPor)}</small></div>
         <span class="pill info">+${Math.round(e.totalUnidades)} und</span>
@@ -747,42 +890,58 @@ function vistaProveedores() {
   }).join('')}</div>`;
 }
 
-function vistaAlertas() {
+// Alertas sin atender: primero los agotados, luego las más recientes.
+const alertasActivas = () => S().alertas.filter(a => !a.atendida).sort((a, b) => (a.tipo === 'agotado' ? -1 : 0) - (b.tipo === 'agotado' ? -1 : 0) || b.fecha - a.fecha);
+// Lotes recibidos que vencen en los próximos 7 días (con su entrega y proveedor).
+function lotesPorVencer() {
   const s = S();
-  const activas = s.alertas.filter(a => !a.atendida).sort((a, b) => (a.tipo === 'agotado' ? -1 : 0) - (b.tipo === 'agotado' ? -1 : 0) || b.fecha - a.fecha);
-  const atendidas = s.alertas.filter(a => a.atendida).sort((a, b) => (b.fechaAtendida || 0) - (a.fechaAtendida || 0)).slice(0, 8);
   const hoy = new Date(inicioDia()).toISOString().slice(0, 10);
   const limite = new Date(inicioDia() + 7 * DIA).toISOString().slice(0, 10);
   const vencen = [];
-  for (const e of s.entregas) for (const l of e.items) {
+  for (const e of s.entregas) e.items.forEach((l, item) => {
     const p = s.productos.find(x => x.id === l.productoId);
-    if (l.vence && l.vence >= hoy && l.vence <= limite && p?.activo !== false && p?.stock > 0) vencen.push({ ...l, proveedor: e.proveedorNombre });
-  }
-  vencen.sort((a, b) => a.vence.localeCompare(b.vence));
-  const diasPara = v => Math.round((new Date(v + 'T00:00:00') - inicioDia()) / DIA);
+    if (l.vence && l.vence >= hoy && l.vence <= limite && p?.activo !== false && p?.stock > 0) vencen.push({ ...l, proveedor: e.proveedorNombre, proveedorId: e.proveedorId, entregaId: e.id, item });
+  });
+  return vencen.sort((a, b) => a.vence.localeCompare(b.vence));
+}
+const diasPara = v => Math.round((new Date(v + 'T00:00:00') - inicioDia()) / DIA);
+const textoVence = d => (d === 0 ? 'Vence hoy' : d === 1 ? 'Vence mañana' : `En ${d} días`);
+
+function vistaAlertas() {
+  const s = S();
+  const activas = alertasActivas();
+  const atendidas = s.alertas.filter(a => a.atendida).sort((a, b) => (b.fechaAtendida || 0) - (a.fechaAtendida || 0)).slice(0, 8);
+  const vencen = lotesPorVencer();
   return `
   <div class="greet card ${activas.length ? 'warn-bg' : ''}">
     <div class="tomi-greet3d" data-tomi3d="alertas" data-estado="${activas.length ? 'preocupado' : 'celebrando'}" title="Tomi"></div>
     <div><h2>${activas.length ? `${activas.length} alerta${activas.length > 1 ? 's' : ''} por atender` : '¡Sin alertas pendientes!'}</h2>
     <p>${activas.length ? 'Se crean solas cuando un producto queda en su stock mínimo o se agota, y se cierran solas cuando entra mercancía.' : 'El inventario está sano. Tomi está feliz.'}</p></div>
+    <div class="sev">
+      <span class="sev-item bad"><b>${activas.filter(a => a.tipo === 'agotado').length}</b>Agotados</span>
+      <span class="sev-item warn"><b>${activas.filter(a => a.tipo !== 'agotado').length}</b>Stock bajo</span>
+      <span class="sev-item amber"><b>${vencen.length}</b>Por vencer</span>
+    </div>
   </div>
   <div class="grid-2" data-tut="alertas">
     <section class="card">
-      <div class="card-head"><h3>Stock bajo y agotados</h3></div>
+      <div class="card-head"><h3><span class="h-ic bad">${icon('bell')}</span>Stock bajo y agotados</h3>${puede('admin') ? '' : '<span class="pill info">Solo lectura</span>'}</div>
       <ul class="list">${activas.map(a => `<li class="alert-li ${a.tipo}">
+        <span class="prod-emoji">${imgProducto(s.productos.find(p => p.id === a.productoId) || { nombre: a.productoNombre })}</span>
         <div class="li-main"><b>${esc(a.productoNombre)}</b><small>Quedan ${a.stock} · mínimo ${a.stockMinimo ?? '—'} · ${fechaHora(a.fecha)}</small></div>
         <span class="pill ${a.tipo === 'agotado' ? 'bad' : 'warn'}">${a.tipo === 'agotado' ? 'Agotado' : 'Stock bajo'}</span>
         <div class="row">${puede('admin', 'bodega') ? `<button class="btn soft sm" data-act="recibir" data-id="${a.productoId}">Recibir</button>` : ''}
-        <button class="btn ghost sm" data-act="alerta-atender" data-id="${a.id}">${icon('check')}Atendida</button></div></li>`).join('') || `<li class="muted">Nada por aquí.</li>`}</ul>
+        ${puede('admin') ? `<button class="btn ghost sm" data-act="alerta-atender" data-id="${a.id}">${icon('check')}Atendida</button>` : ''}</div></li>`).join('') || `<li class="muted">Nada por aquí.</li>`}</ul>
+      ${puede('admin') ? '' : '<p class="muted note solo-lectura">Puedes ver las alertas, pero solo el administrador las marca como atendidas. Si ves stock bajo, avísale.</p>'}
     </section>
     <section class="card">
-      <div class="card-head"><h3>Por vencer en 7 días</h3><span class="muted">según lotes recibidos</span></div>
+      <div class="card-head"><h3><span class="h-ic warn">${icon('calendar')}</span>Por vencer en 7 días</h3><span class="muted">según lotes recibidos</span></div>
       <ul class="list">${vencen.map(v => { const d = diasPara(v.vence); return `<li>
         <div class="li-main"><b>${esc(v.nombre)}</b><small>Lote ${esc(v.lote || '—')} · ${esc(v.proveedor)} · ${fmtCant(v.cantidad, v.unidad)}</small></div>
-        <span class="pill ${d <= 2 ? 'bad' : 'warn'}">${d === 0 ? 'Vence hoy' : d === 1 ? 'Vence mañana' : `En ${d} días`}</span>
-        ${puede('admin', 'bodega') ? `<button class="btn ghost sm danger" data-act="baja-vencimiento" data-id="${v.productoId}" data-cant="${v.cantidad}" data-lote="${esc(v.lote || '')}">Dar de baja</button>` : ''}
+        <span class="pill ${d <= 2 ? 'bad' : 'warn'}">${textoVence(d)}</span>
+        ${puede('admin', 'bodega') ? `<button class="btn soft sm llamar-btn" data-act="llamar-proveedor" data-entrega="${v.entregaId}" data-item="${v.item}">${icon('phone')}Llamar al proveedor</button>` : ''}
         </li>`; }).join('') || '<li class="muted">Ningún lote vence esta semana.</li>'}</ul>
-      <div class="card-head sub"><h3>Atendidas recientemente</h3></div>
+      <div class="card-head sub"><h3><span class="h-ic">${icon('check')}</span>Atendidas recientemente</h3></div>
       <ul class="list dim">${atendidas.map(a => `<li><div class="li-main"><b>${esc(a.productoNombre)}</b><small>${a.resuelta === 'auto' ? 'Se cerró sola al entrar mercancía' : 'Atendida por ' + esc(a.atendidaPor ?? '—')} · ${a.fechaAtendida ? fechaHora(a.fechaAtendida) : ''}</small></div><span class="pill ok">Resuelta</span></li>`).join('') || '<li class="muted">Ninguna todavía.</li>'}</ul>
     </section>
   </div>`;
@@ -1412,8 +1571,9 @@ function darDeBajaVencido(d) {
 // ---------- acciones ----------
 const busca = (col, id) => S()[col].find(x => x.id === id);
 const ACCIONES = {
-  'ir': d => { ruta = d.ruta; ui.menu = false; render(); window.scrollTo({ top: 0 }); },
-  'menu': () => { ui.menu = !ui.menu; render(); },
+  'ir': d => { ruta = d.ruta; ui.menu = false; ui.avisos = false; render(); window.scrollTo({ top: 0 }); },
+  'menu': () => { ui.menu = !ui.menu; ui.avisos = false; render(); },
+  'avisos': () => { ui.avisos = !ui.avisos; ui.menu = false; render(); },
   'tutorial': () => abrirTutorial(0),
   'tut-sig': () => irAPaso(ui.tut.i + 1),
   'tut-ant': () => irAPaso(ui.tut.i - 1),
@@ -1508,6 +1668,29 @@ const ACCIONES = {
   'prov-editar': d => formProveedor(busca('proveedores', d.id)),
   'prov-eliminar': d => { const p = busca('proveedores', d.id); confirmar('Eliminar proveedor', `Se eliminará "${esc(p.nombre)}". Sus entregas anteriores se conservan en el historial.`, 'Eliminar', async () => { await store.remove('proveedores', p.id, sesion); toast('Proveedor eliminado.'); }); },
 
+  'llamar-proveedor': d => {
+    const e = busca('entregas', d.entrega);
+    const l = e?.items[Number(d.item)];
+    if (!l) return toast('No encontré ese lote. Recarga la pantalla.', 'preocupado');
+    const prov = busca('proveedores', e.proveedorId) || S().proveedores.find(x => x.nombre === e.proveedorNombre);
+    const tel = (prov?.telefono || '').trim();
+    const dias = diasPara(l.vence);
+    abrirModal({
+      titulo: 'Llamar al proveedor',
+      cuerpo: `<div class="llamar">
+        <div class="llamar-prod"><span class="prod-emoji big">${imgProducto(busca('productos', l.productoId) || { nombre: l.nombre })}</span>
+          <div><b>${esc(l.nombre)}</b><small>Lote ${esc(l.lote || '—')} · ${fmtCant(l.cantidad, l.unidad)} · vence ${esc(l.vence)}</small>
+          <span class="pill ${dias <= 2 ? 'bad' : 'warn'}">${textoVence(dias)}</span></div></div>
+        <dl class="dl"><dt>Proveedor</dt><dd><b>${esc(prov?.nombre || e.proveedorNombre)}</b></dd>
+          <dt>Contacto</dt><dd>${esc(prov?.contacto || '—')}</dd>
+          <dt>Teléfono</dt><dd class="mono">${esc(tel || '—')}</dd></dl>
+        ${tel ? '<p class="note muted">Pídele el cambio de esta mercancía antes de que venza. La llamada no descuenta nada del inventario.</p>'
+          : `<p class="form-error">${prov ? 'Este proveedor no tiene un teléfono registrado.' : 'Este proveedor ya no está en el sistema.'} Actualiza su información en Proveedores para poder llamarlo.</p>`}
+      </div>`,
+      extra: tel ? `<a class="btn primary btn-llamar" href="tel:${esc(tel.replace(/[^\d+]/g, ''))}">${icon('phone')}Llamar a ${esc(prov.nombre)}</a>`
+        : prov && puede('admin') ? `<button type="button" class="btn soft btn-llamar" data-act="prov-editar" data-id="${prov.id}">${icon('edit')}Actualizar proveedor</button>` : '',
+    });
+  },
   'alerta-atender': async d => { await store.atenderAlerta(d.id, sesion); toast('Alerta marcada como atendida.'); },
   'hist-tab': d => { ui.histTab = d.tab; render(); },
   'hist-tipo': d => { ui.histTipo = d.tipo; render(); },
@@ -1530,9 +1713,17 @@ function agregarAlCarrito(id) {
 
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-act]');
-  if (!b) { if (ui.menu && !e.target.closest('.me')) { ui.menu = false; render(); } return; }
+  if (!b) {
+    if (ui.menu && !e.target.closest('.me')) { ui.menu = false; render(); }
+    if (ui.avisos && !e.target.closest('.avisos-wrap')) { ui.avisos = false; render(); }
+    return;
+  }
   if (b.tagName === 'A') e.preventDefault();
+  // Cualquier otro botón cierra el panel de la campanita.
+  const cerrarAvisos = ui.avisos && !b.closest('.avisos-wrap');
+  if (cerrarAvisos) ui.avisos = false;
   ACCIONES[b.dataset.act]?.(b.dataset, b, e);
+  if (cerrarAvisos && $('.avisos')) programarRender();
 });
 
 document.addEventListener('input', e => {
@@ -1576,6 +1767,7 @@ document.addEventListener('keydown', e => {
     if (e.key === 'Escape') cerrarTutorial();
     return;
   }
+  if (e.key === 'Escape' && ui.avisos) { ui.avisos = false; render(); return; }
   // F2: Enfocar barra de búsqueda / lector en caja
   if (e.key === 'F2') {
     e.preventDefault();
@@ -1596,6 +1788,17 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && !$('#modal')?.open && ruta === 'caja' && ui.cajaQ) {
     ui.cajaQ = '';
     render();
+    return;
+  }
+
+  // Enter en el buscador general de la barra superior: usa los buscadores que ya existen
+  // (el de caja si estás vendiendo; si no, el del catálogo de Productos).
+  if (e.key === 'Enter' && e.target.id === 'globalQ') {
+    const q = e.target.value.trim();
+    if (ruta === 'caja') { ui.cajaQ = q; ui.cajaCat = 'todas'; } else { ui.prodQ = q; ui.prodCat = 'todas'; ruta = 'productos'; }
+    render();
+    const destino = $(ruta === 'caja' ? '#cajaQ' : '#prodQ');
+    if (destino) { destino.focus(); destino.setSelectionRange(destino.value.length, destino.value.length); }
     return;
   }
 
